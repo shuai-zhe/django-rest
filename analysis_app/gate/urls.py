@@ -16,13 +16,13 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path,include
-from .views import ProjectResource
-from rest_framework.routers import DefaultRouter
+
+from core.routes import ResourceRouter
+from . import views
 app_name = 'gate'
-routers = DefaultRouter()
-routers.register(r'project', ProjectResource, basename='project')
 urlpatterns = [
-    path('admin/', admin.site.urls),
+    # path('admin/', admin.site.urls),
+    # path('gate/', ProjectResource.as_view()),
 ]
 
-urlpatterns+=routers.urls
+ResourceRouter(urlpatterns).register_module(viewset_module=views)
