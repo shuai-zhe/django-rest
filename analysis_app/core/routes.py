@@ -10,6 +10,7 @@ from core.base import Resource
 class ResourceRouter():
     def __init__(self, urlpatterns:list):
         self.urlpatterns = urlpatterns
+
     def register_module(self, viewset_module, prefix=None):
         # 注册views视图的所有 Resource类，根据命名规则自动注册路由
         for name, viewset in viewset_module.__dict__.items():

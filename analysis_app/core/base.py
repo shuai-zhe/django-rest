@@ -10,6 +10,9 @@ from rest_framework.viewsets import ViewSet
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 
+from core.utils import serializer_formatter
+from core.excepting import ValidateErrorException
+
 # 定义一个资源类，用于自动校验views视图的入参和返回值校验
 class Resource(APIView,metaclass=abc.ABCMeta):
     # 定义一个资源类，用于自动校验views视图的入参和返回值校验
@@ -18,6 +21,11 @@ class Resource(APIView,metaclass=abc.ABCMeta):
     many_request_data = False
     method = None
     prefix = None
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.headers = None
+        self.response = None
 
     def dispatch(self, request, *args, **kwargs):
         # 所有请求都先到这里
@@ -41,16 +49,11 @@ class Resource(APIView,metaclass=abc.ABCMeta):
         self.response = self.finalize_response(request, response, *args, **kwargs)
         return self.response
 
-    def unified_handler(self, request, *args, **kwargs):
-        # 你的统一业务逻辑
-        return Response({
-            "message": "这是统一处理逻辑，不区分 GET/POST/PUT...",
-            "method": request.method,
-            "data": {}
-        }, status=status.HTTP_200_OK)
-    # 实现请求逻辑接口，不实现报错
     @abc.abstractmethod
     def perform_request(self, validated_data):
+        """
+            实现请求逻辑接口，不实现报错
+        """
         raise NotImplementedError()
 
     def validate_request_data(self, request_data):
@@ -59,7 +62,8 @@ class Resource(APIView,metaclass=abc.ABCMeta):
             return request_data
         request_serializer = self.RequestSerializer(data=request_data, many=self.many_request_data)
         if not request_serializer.is_valid():
-            raise serializers.ValidationError(request_serializer.errors)
+            raise ValidateErrorException(message=serializer_formatter(request_serializer))
+            # raise serializers.ValidationError(request_serializer.errors)
         return request_serializer.validated_data
 
     def validate_response_data(self, response_data):
@@ -67,7 +71,7 @@ class Resource(APIView,metaclass=abc.ABCMeta):
             return response_data
         response_serializer = self.ResponseSerializer(data=response_data)
         if not response_serializer.is_valid():
-            raise serializers.ValidationError(response_serializer.errors)
+            raise ValidateErrorException(message=serializer_formatter(response_serializer))
         return response_serializer.validated_data
 
     def init_request(self, request,*args, **kwargs):

@@ -9,7 +9,7 @@ from .models import Project
 
 class ProjectResource(Resource):
     RequestSerializer = ProjectSerializer
-    method = 'POST'
+    method = 'GET'
     prefix = 'project'
     def perform_request(self, validated_data):
         """处理业务逻辑"""
