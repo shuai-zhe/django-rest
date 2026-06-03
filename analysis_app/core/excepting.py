@@ -34,8 +34,12 @@ class BaseException(Exception):
 
 
 
+class CommonException(BaseException):
+    status_code = 500
+    default_detail = _("服务器错误")
+    code = 500
 
 class ValidateErrorException(BaseException):
     status_code = 400
     default_detail = _("数据校验失败")
-    code = 101
+    code = 400

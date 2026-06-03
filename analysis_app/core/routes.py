@@ -7,7 +7,7 @@ from rest_framework.routers import DefaultRouter
 from core.base import Resource
 
 
-class ResourceRouter():
+class ResourceRouter:
     def __init__(self, urlpatterns:list):
         self.urlpatterns = urlpatterns
 
