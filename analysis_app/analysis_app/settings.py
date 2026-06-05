@@ -82,6 +82,44 @@ DATABASES = {
     }
 }
 
+# Redis Configuration
+REDIS_HOST = 'localhost'
+REDIS_PORT = 6379
+REDIS_DB = 0
+REDIS_PASSWORD = None  # 如果没有密码设置为None
+
+# Cache Configuration
+CACHES = {
+    'default': {
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': f'redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}',
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            'PASSWORD': REDIS_PASSWORD,
+            'SOCKET_CONNECT_TIMEOUT': 5,  # seconds
+            'SOCKET_TIMEOUT': 5,  # seconds
+            # 连接池配置
+            'CONNECTION_POOL_KWARGS': {
+                'max_connections': 100,           # 最大连接数
+                'retry_on_timeout': True,         # 超时重试
+                'socket_keepalive': True,         # 保持连接活跃
+                'socket_keepalive_options': {     # 保持连接选项
+                    'TCP_KEEPIDLE': 60,          # 空闲60秒后开始发送keepalive
+                    'TCP_KEEPINTVL': 30,         # 每30秒发送一次keepalive
+                    'TCP_KEEPCNT': 3,            # 最多重试3次
+                },
+            },
+            # 序列化器配置
+            'SERIALIZER': 'django_redis.serializers.json.JSONSerializer',
+            'COMPRESSOR': 'django_redis.compressors.zlib.ZlibCompressor',
+        },
+        'KEY_PREFIX': 'analysis_app',
+    }
+}
+
+# Session Configuration - 使用Redis存储会话
+SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
+SESSION_CACHE_ALIAS = 'default'
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
