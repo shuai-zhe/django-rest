@@ -10,9 +10,10 @@ class ChoiceMixin(Enum):
         return self
 
     @classmethod
-    def choices(cls,excludes=None) -> tuple[tuple[Any, Any], ...]:
+    def choices(cls, excludes=None) -> tuple[tuple[Any, Any], ...]:
         excludes = excludes or []
-        return tuple((item.value,item.translate) for item in cls if item not in excludes)
+        return tuple((item.value, item.translate) for item in cls if item not in excludes)
+
 
 class ProjectStatus(ChoiceMixin):
     SPOT = "spot"
@@ -25,10 +26,3 @@ class ProjectStatus(ChoiceMixin):
             ProjectStatus.FUTURES: "合约",
         }
         return map_[self]
-
-
-
-
-
-
-
