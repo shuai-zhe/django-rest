@@ -8,7 +8,7 @@ class Project(models.Model):
     name = models.CharField(max_length=100, verbose_name='项目名称')
     display_name = models.CharField(max_length=100, verbose_name='项目显示名称')
     code_id = models.CharField(max_length=100, verbose_name='项目代码')
-    extra_info = models.JSONField(verbose_name='项目额外信息',default={})
+    extra_info = models.JSONField(verbose_name='项目额外信息',default=dict)
     # 使用JSON字段存储不同状态的数据
     price_dict = models.JSONField(
         default=dict,

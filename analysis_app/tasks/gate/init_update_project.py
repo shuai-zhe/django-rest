@@ -1,18 +1,16 @@
 import logging
-
-import os
-import django
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "analysis_app.settings")
-django.setup()
-
+# import os
+# import django
+# os.environ.setdefault("DJANGO_SETTINGS_MODULE", "analysis_app.settings")
+# django.setup()
+from celery import shared_task
 from apis.cryptobubbles.default import _CryptobubblesApi
 from gate.models import Project
-from core.constants import ProjectStatus
 logger = logging.getLogger("init_update_project")
 
 class ProjectMerge:
     # 筛选数据
-    def __init__(self,status,extra_info_update_fileds,status_dict_update_fileds):
+    def __init__(self,status,extra_info_update_fileds:dict|list=None,status_dict_update_fileds:dict|list=None):
         # 筛选已存在的数据
         self.base_project = self.get_origin_data()
         self.base_project_code_id = self.base_project_code_id()

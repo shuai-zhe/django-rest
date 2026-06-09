@@ -31,6 +31,8 @@ ALLOWED_HOSTS = []
 # Application definition
 
 INSTALLED_APPS = [
+    "django_celery_beat",
+    "django_celery_results",
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -39,7 +41,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'gate',
-
+    'tasks',
 ]
 
 MIDDLEWARE = [
@@ -143,9 +145,9 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = 'zh-hans'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'Asia/Shanghai'
 
 USE_I18N = True
 
@@ -165,3 +167,18 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 REST_FRAMEWORK = {
     "EXCEPTION_HANDLER":"core.rest_framework_common.exception_handler"
 }
+
+# Celery Configuration
+CELERY_BROKER_URL = 'redis://127.0.0.1:6379/0'
+CELERY_RESULT_BACKEND = 'redis://127.0.0.1:6379/1'
+CELERY_WORKER_CONCURRENCY = 20
+CELERY_WORKER_PREFETCH_MULTIPLIER = 20
+CELERY_WORKER_MAX_TASKS_PER_CHILD = 100
+CELERY_TASK_ALWAYS_EAGER = False
+CELERY_WORKER_DISABLE_RATE_LIMITS = True
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+
+# Timezone configuration
+CELERY_TIMEZONE = 'Asia/Shanghai'
+CELERY_ENABLE_UTC = False
+CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
