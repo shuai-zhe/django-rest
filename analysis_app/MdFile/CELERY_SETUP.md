@@ -1,8 +1,20 @@
-# celery配置说明
+# 基本概念
+## broker消息传输【中间件：redis、kafka、rabbitMQ】
+## worker 任务单元，执行的一个任务
+## backend 结果端
+# celery启动命令
+## 启动beat定时任务
+`celery -A analysis_app beat --loglevel=info`
+### 使用 django_celery_beat.schedulers:DatabaseScheduler 启动 celery beat 服务：
 
-# celery配置文件位置 `analysis_app/celery.py`
-# celery参数配置位于 `analysis_app/settings.py`;(必须注册定时任务、django_celery_beat、django_celery_results)
-# 定时任务定义再 `tasks/aync.py` ;(需要在[__init__.py](analysis_app/__init__.py)文件中导入确保能被django启动时加载)
+`celery -A proj beat -l INFO --scheduler django_celery_beat.schedulers:DatabaseScheduler`
+## 启动worker[工作单元]
+`celery -A analysis_app worker -P gevent --loglevel=info`
+注意windows需要使用gevent进行启动否则会出现权限问题
+# celery配置说明
+### celery配置文件位置 `analysis_app/celery.py`
+### celery参数配置位于 `analysis_app/settings.py`;(必须注册定时任务、django_celery_beat、django_celery_results)
+### 定时任务定义再 `tasks/aync.py` ;(需要在[__init__.py](analysis_app/__init__.py)文件中导入确保能被django启动时加载)
 
 # celery配置遇到的一些问题
 # 根据规则必须要在app文件下配置一个 `celery.py` 文件使得Celery能够自己匹配
