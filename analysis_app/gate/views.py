@@ -14,4 +14,4 @@ class ProjectResource(Resource):
     def perform_request(self, validated_data):
         """处理业务逻辑"""
         # 这里实现具体的业务逻辑
-        return {'message': 'Project created successfully', 'data': validated_data}
+        return validated_data

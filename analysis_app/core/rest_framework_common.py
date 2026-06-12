@@ -1,7 +1,11 @@
 from rest_framework.response import Response
-from  core.excepting import ValidateErrorException,CommonException
-# 自定义序列化器校验错误信息
+from rest_framework.renderers import JSONRenderer
+from core.excepting import ValidateErrorException,CommonException
 
+
+
+
+# 自定义序列化器校验错误信息
 def exception_handler(exc, context):
     """
     自定义异常处理
@@ -21,3 +25,32 @@ def exception_handler(exc, context):
         'message': message
     }
     return Response(data=error,status=code)
+
+
+
+class APIRenderer(JSONRenderer):
+
+    def render(self, data, accepted_media_type=None, renderer_context=None):
+        """
+        :param data: 响应数据
+        :param accepted_media_type: 接受的媒体类型
+        :param renderer_context: 渲染上下文
+        :return: 响应数据
+        """
+        # 重写render方法
+        response = renderer_context["response"]
+
+        response_format = {
+            "code": response.status_code,
+            "data": data,
+            "success": True
+        }
+        if response.status_code == 200:
+            response_format["success"] = True
+        else:
+            response_format["success"] = False
+            response_format["errors"] = data
+
+        return super(APIRenderer, self).render(
+            response_format, accepted_media_type, renderer_context
+        )

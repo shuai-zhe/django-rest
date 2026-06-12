@@ -36,14 +36,17 @@ class Resource(APIView,metaclass=abc.ABCMeta):
         self.headers = self.default_response_headers  # deprecate?
         try:
             self.initial(request, *args, **kwargs)
+            # 这里是找到对应的请求方法 比如 def get  def post
             # Get the appropriate handler method
             #  if request.method.lower() in self.http_method_names:
-            #                 handler = getattr(self, request.method.lower(),
+            #     handler = getattr(self, request.method.lower(),
             #                                   self.http_method_not_allowed)
-            #             else:
-            #                 handler = self.http_method_not_allowed
+            #     else:
+            #         handler = self.http_method_not_allowed
             # 重写dispatch 方法，不区分请求方法,直接调用request 自定义统一流程
-            response = JsonResponse(self.init_request(request, *args, **kwargs))
+            response_data = self.init_request(request, *args, **kwargs)
+            response = Response(response_data)
+
         except Exception as exc:
             response = self.handle_exception(exc)
         self.response = self.finalize_response(request, response, *args, **kwargs)
@@ -76,7 +79,7 @@ class Resource(APIView,metaclass=abc.ABCMeta):
 
     def init_request(self, request,*args, **kwargs):
         request_data = request.data if self.method=='POST' else request.query_params
-        # 如果没定义method,则根据请求方法来判断
+        # 如果没定义method,则根据请求方法来判断；最好没有直接报错
         if not self.method:
             request_data = request.data if request.method == "POST" else request.query_params
         validate_request = self.validate_request_data(request_data)

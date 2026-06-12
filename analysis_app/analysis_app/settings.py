@@ -15,7 +15,6 @@ from pathlib import Path
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
@@ -26,7 +25,6 @@ SECRET_KEY = 'django-insecure-$o!pq=^wu=q&=^p9g(fb7r4lr2#n)1i_a)tzsm1srde#(#44^=
 DEBUG = True
 
 ALLOWED_HOSTS = []
-
 
 # Application definition
 
@@ -73,7 +71,6 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'analysis_app.wsgi.application'
 
-
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
@@ -102,13 +99,13 @@ CACHES = {
             'SOCKET_TIMEOUT': 5,  # seconds
             # 连接池配置
             'CONNECTION_POOL_KWARGS': {
-                'max_connections': 100,           # 最大连接数
-                'retry_on_timeout': True,         # 超时重试
-                'socket_keepalive': True,         # 保持连接活跃
-                'socket_keepalive_options': {     # 保持连接选项
-                    'TCP_KEEPIDLE': 60,          # 空闲60秒后开始发送keepalive
-                    'TCP_KEEPINTVL': 30,         # 每30秒发送一次keepalive
-                    'TCP_KEEPCNT': 3,            # 最多重试3次
+                'max_connections': 100,  # 最大连接数
+                'retry_on_timeout': True,  # 超时重试
+                'socket_keepalive': True,  # 保持连接活跃
+                'socket_keepalive_options': {  # 保持连接选项
+                    'TCP_KEEPIDLE': 60,  # 空闲60秒后开始发送keepalive
+                    'TCP_KEEPINTVL': 30,  # 每30秒发送一次keepalive
+                    'TCP_KEEPCNT': 3,  # 最多重试3次
                 },
             },
             # 序列化器配置
@@ -141,7 +138,6 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
 
@@ -152,7 +148,6 @@ TIME_ZONE = 'Asia/Shanghai'
 USE_I18N = True
 
 USE_TZ = True
-
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
@@ -165,7 +160,9 @@ STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 REST_FRAMEWORK = {
-    "EXCEPTION_HANDLER":"core.rest_framework_common.exception_handler"
+    "EXCEPTION_HANDLER": "core.rest_framework_common.exception_handler",
+    "DEFAULT_RENDERER_CLASSES": ["core.rest_framework_common.APIRenderer"],
+
 }
 
 # Celery Configuration
