@@ -1,7 +1,6 @@
 from celery import shared_task
 from core.constants import ProjectStatus
 
-
 @shared_task(name="get_project_data_sync")
 def get_project_data_sync():
     from tasks.gate.init_update_project import ProjectMerge

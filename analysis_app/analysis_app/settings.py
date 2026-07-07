@@ -9,11 +9,16 @@ https://docs.djangoproject.com/en/5.2/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
+import os
 
 from pathlib import Path
+import importlib
+from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+load_dotenv(BASE_DIR / ".env")
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
@@ -24,7 +29,7 @@ SECRET_KEY = 'django-insecure-$o!pq=^wu=q&=^p9g(fb7r4lr2#n)1i_a)tzsm1srde#(#44^=
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["*"]
 
 # Application definition
 
@@ -74,47 +79,6 @@ WSGI_APPLICATION = 'analysis_app.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
-}
-
-# Redis Configuration
-REDIS_HOST = 'localhost'
-REDIS_PORT = 6379
-REDIS_DB = 0
-REDIS_PASSWORD = None  # 如果没有密码设置为None
-
-# Cache Configuration
-CACHES = {
-    'default': {
-        'BACKEND': 'django_redis.cache.RedisCache',
-        'LOCATION': f'redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}',
-        'OPTIONS': {
-            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-            'PASSWORD': REDIS_PASSWORD,
-            'SOCKET_CONNECT_TIMEOUT': 5,  # seconds
-            'SOCKET_TIMEOUT': 5,  # seconds
-            # 连接池配置
-            'CONNECTION_POOL_KWARGS': {
-                'max_connections': 100,  # 最大连接数
-                'retry_on_timeout': True,  # 超时重试
-                'socket_keepalive': True,  # 保持连接活跃
-                'socket_keepalive_options': {  # 保持连接选项
-                    'TCP_KEEPIDLE': 60,  # 空闲60秒后开始发送keepalive
-                    'TCP_KEEPINTVL': 30,  # 每30秒发送一次keepalive
-                    'TCP_KEEPCNT': 3,  # 最多重试3次
-                },
-            },
-            # 序列化器配置
-            'SERIALIZER': 'django_redis.serializers.json.JSONSerializer',
-            'COMPRESSOR': 'django_redis.compressors.zlib.ZlibCompressor',
-        },
-        'KEY_PREFIX': 'analysis_app',
-    }
-}
 
 # Session Configuration - 使用Redis存储会话
 SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
@@ -165,17 +129,16 @@ REST_FRAMEWORK = {
 
 }
 
-# Celery Configuration
-CELERY_BROKER_URL = 'redis://127.0.0.1:6379/0'
-CELERY_RESULT_BACKEND = 'redis://127.0.0.1:6379/1'
-CELERY_WORKER_CONCURRENCY = 20
-CELERY_WORKER_PREFETCH_MULTIPLIER = 20
-CELERY_WORKER_MAX_TASKS_PER_CHILD = 100
-CELERY_TASK_ALWAYS_EAGER = False
-CELERY_WORKER_DISABLE_RATE_LIMITS = True
-CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+# 根据环境变量进行导入对于的环境数据
+try:
+    env = os.environ.get("ENV", "dev")
+    env_module = importlib.import_module(f"analysis_app.config.{env}")
+    for i in dir(env_module):
+        if not i.startswith("_") and i.upper() == i:
+            globals()[i] = getattr(env_module, i)
+except Exception as e:
+    print(f"Failed to import environment configuration: {e}")
+    raise e
 
-# Timezone configuration
-CELERY_TIMEZONE = 'Asia/Shanghai'
-CELERY_ENABLE_UTC = False
-CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+
+

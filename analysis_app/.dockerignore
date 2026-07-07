@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# 虚拟环境
+venv/
+.venv/
+env/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# 数据库
+*.sqlite3
+
+# 环境变量
+.env
+.env.*
+
+# 日志
+*.log
+
+# 静态文件收集（通常 build 时单独处理）
+staticfiles/
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose*.yml
