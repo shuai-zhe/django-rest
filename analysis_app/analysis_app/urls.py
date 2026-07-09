@@ -24,6 +24,6 @@ from rest_framework.routers import SimpleRouter
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('gate/', include('gate.urls',namespace='gate')),
+    path('gate/', include('modules.gate.urls', namespace='gate')),
 
 ]
