@@ -17,4 +17,4 @@ celery -A analysis_app worker --loglevel=info &
 
 # Django Shell (进入交互模式)
 echo "Starting Django Shell..."
-python manage.py runserver 127.0.0.1:5001
+python manage.py runserver 0.0.0.0:5001

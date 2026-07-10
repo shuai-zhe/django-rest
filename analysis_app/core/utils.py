@@ -1,13 +1,5 @@
 from rest_framework.serializers import Serializer
 
-
-
-# class JsonResponse(HttpResponse):
-#     def __init__(self):
-
-
-
-
 def serializer_formatter(serializer:Serializer):
     '''
     required_filed:
