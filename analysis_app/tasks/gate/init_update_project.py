@@ -3,9 +3,8 @@ import logging
 # import django
 # os.environ.setdefault("DJANGO_SETTINGS_MODULE", "analysis_app.settings")
 # django.setup()
-from celery import shared_task
 from apis.cryptobubbles.default import _CryptobubblesApi
-from gate.models import Project
+from modules.gate.models import Project
 logger = logging.getLogger("init_update_project")
 
 class ProjectMerge:
