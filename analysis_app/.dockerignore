@@ -30,6 +30,6 @@ env/
 staticfiles/
 
 # Docker
-Dockerfile
+deploy_file/Dockerfile
 .dockerignore
-docker-compose*.yml
+deploy_file/docker-compose.yml
