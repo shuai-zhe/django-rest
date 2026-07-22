@@ -1,20 +1,19 @@
 # -*- coding: utf-8 -*-
 import abc
 
-from django.http import HttpResponse,JsonResponse
-
+from django.http import HttpResponse, JsonResponse
 from rest_framework import serializers, status
+from rest_framework.response import Response
 from rest_framework.serializers import Serializer
 from rest_framework.views import APIView
-from rest_framework.viewsets import ViewSet
-from rest_framework.response import Response
-from rest_framework.viewsets import GenericViewSet
+from rest_framework.viewsets import GenericViewSet, ViewSet
 
-from core.utils import serializer_formatter
 from core.excepting import ValidateErrorException
+from core.utils import serializer_formatter
+
 
 # 定义一个资源类，用于自动校验views视图的入参和返回值校验
-class Resource(APIView,metaclass=abc.ABCMeta):
+class Resource(APIView, metaclass=abc.ABCMeta):
     # 定义一个资源类，用于自动校验views视图的入参和返回值校验
     RequestSerializer = None
     ResponseSerializer = None
@@ -55,7 +54,7 @@ class Resource(APIView,metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def perform_request(self, validated_data):
         """
-            实现请求逻辑接口，不实现报错
+        实现请求逻辑接口，不实现报错
         """
         raise NotImplementedError()
 
@@ -63,9 +62,13 @@ class Resource(APIView,metaclass=abc.ABCMeta):
         # 校验请求参数
         if self.RequestSerializer is None:
             return request_data
-        request_serializer = self.RequestSerializer(data=request_data, many=self.many_request_data)
+        request_serializer = self.RequestSerializer(
+            data=request_data, many=self.many_request_data
+        )
         if not request_serializer.is_valid():
-            raise ValidateErrorException(message=serializer_formatter(request_serializer))
+            raise ValidateErrorException(
+                message=serializer_formatter(request_serializer)
+            )
             # raise serializers.ValidationError(request_serializer.errors)
         return request_serializer.validated_data
 
@@ -74,15 +77,45 @@ class Resource(APIView,metaclass=abc.ABCMeta):
             return response_data
         response_serializer = self.ResponseSerializer(data=response_data)
         if not response_serializer.is_valid():
-            raise ValidateErrorException(message=serializer_formatter(response_serializer))
+            raise ValidateErrorException(
+                message=serializer_formatter(response_serializer)
+            )
         return response_serializer.validated_data
 
-    def init_request(self, request,*args, **kwargs):
-        request_data = request.data if self.method=='POST' else request.query_params
+    def init_request(self, request, *args, **kwargs):
+        request_data = request.data if self.method == "POST" else request.query_params
         # 如果没定义method,则根据请求方法来判断；最好没有直接报错
         if not self.method:
-            request_data = request.data if request.method == "POST" else request.query_params
+            request_data = (
+                request.data if request.method == "POST" else request.query_params
+            )
         validate_request = self.validate_request_data(request_data)
         response_data = self.perform_request(validate_request)
         validate_response = self.validate_response_data(response_data)
         return validate_response
+
+
+class ResourceVail:
+    def __init__(self, method: str, resource: Resource, prefix: str = None, **kwargs):
+        # 定义一个资源类，用于自动校验views视图的入参和返回值校验
+        # if not isinstance(resource,Resource):
+        #     raise ModuleNotFoundError("请提供正确的Resource子类")
+        self.method = method
+        self.resource = resource
+        self.prefix = prefix
+
+        self.RequestSerializer = kwargs.get("RequestSerializer", None)
+        self.ResponseSerializer = kwargs.get("ResponseSerializer", None)
+        self.many_request_data = kwargs.get("many_request_data", False)
+
+
+class ResourceExtend:
+    routers: list[ResourceVail] = []
+
+    def route_vail(self):
+        for route in self.routers:
+            print(route, "-----------")
+            if not isinstance(route, ResourceVail):
+                raise ModuleNotFoundError(
+                    f"配置路由失败：请提供正确的Resource子类.{route.__class__.__name__}"
+                )
