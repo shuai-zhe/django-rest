@@ -39,7 +39,6 @@ class APIRenderer(JSONRenderer):
         """
         # 重写render方法
         response = renderer_context["response"]
-
         response_format = {
             "code": response.status_code,
             "data": data,

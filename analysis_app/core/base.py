@@ -98,8 +98,8 @@ class Resource(APIView, metaclass=abc.ABCMeta):
 class ResourceVail:
     def __init__(self, method: str, resource: Resource, prefix: str = None, **kwargs):
         # 定义一个资源类，用于自动校验views视图的入参和返回值校验
-        # if not isinstance(resource,Resource):
-        #     raise ModuleNotFoundError("请提供正确的Resource子类")
+        if not isinstance(resource,Resource):
+            raise ModuleNotFoundError("请提供正确的Resource子类")
         self.method = method
         self.resource = resource
         self.prefix = prefix
@@ -114,7 +114,6 @@ class ResourceExtend:
 
     def route_vail(self):
         for route in self.routers:
-            print(route, "-----------")
             if not isinstance(route, ResourceVail):
                 raise ModuleNotFoundError(
                     f"配置路由失败：请提供正确的Resource子类.{route.__class__.__name__}"
