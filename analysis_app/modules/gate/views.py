@@ -4,6 +4,4 @@ from .resources import ProjectListResource
 
 
 class ProjectViewSet(ResourceExtend):
-    routers = [
-        ResourceVail("GET", ProjectListResource(), prefix="project")
-    ]
+    routers = [ResourceVail("GET", ProjectListResource, prefix="project")]

@@ -14,7 +14,9 @@ services:
     restart: always
 
   django:
-    build: ..
+    build:
+      dockerfile: deploy_file/Dockerfile
+      context: ..
     container_name: web-gate
     ports:
       - "5001:5001"

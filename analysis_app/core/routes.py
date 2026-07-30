@@ -22,7 +22,11 @@ class ResourceRouter:
                 continue
 
             for resource_view in getattr(viewset, "routers", []):
-                if not isinstance(getattr(resource_view, "resource", None), Resource):
+                resource_cls = getattr(resource_view, "resource", None)
+                if not (
+                    isinstance(resource_cls, type)
+                    and issubclass(resource_cls, Resource)
+                ):
                     continue
                 self.urlpatterns.append(
                     path(
