@@ -68,6 +68,24 @@ function clamp(v, lo, hi) {
     return isNaN(n) ? null : Math.max(lo, Math.min(hi, n))
 }
 
+// 根据数值返回数量级单位标签（用于交易量/市值输入框实时提示）
+function magnitudeLabel(v) {
+    if (v == null || v === '') return ''
+    const n = Number(v)
+    if (isNaN(n)) return ''
+    const abs = Math.abs(n)
+    if (abs >= 1e11) return '百亿级'
+    if (abs >= 1e10) return '十亿级'
+    if (abs >= 1e9)  return '亿级'
+    if (abs >= 1e8)  return '亿级'
+    if (abs >= 1e7)  return '千万级'
+    if (abs >= 1e6)  return '百万级'
+    if (abs >= 1e5)  return '十万级'
+    if (abs >= 1e4)  return '万级'
+    if (abs >= 1e3)  return '千级'
+    return ''
+}
+
 function emitChange() {
     emit('update:modelValue', {
         rank:    { ...local.rank },
@@ -100,6 +118,11 @@ function selectNone(section) {
 function updateCustom(section, field, val) {
     local[section][field] = val === '' ? null : Number(val)
     emitChange()
+}
+
+// 仅实时更新本地值（用于单位实时提示），不触发筛选
+function updateInput(section, field, val) {
+    local[section][field] = val === '' ? null : Number(val)
 }
 
 function handleReset() {
@@ -197,12 +220,12 @@ defineExpose({ activeTags, handleReset })
                 <div class="custom-row" :class="{ disabled: local.rank.presetIdx !== -1 }">
                     <input type="number" class="ci" placeholder="最小"
                         :value="local.rank.customMin"
-                        @input="updateCustom('rank', 'customMin', $event.target.value)"
+                        @change="updateCustom('rank', 'customMin', $event.target.value)"
                         :disabled="local.rank.presetIdx !== -1" />
                     <span class="ci-sep">—</span>
                     <input type="number" class="ci" placeholder="最大"
                         :value="local.rank.customMax"
-                        @input="updateCustom('rank', 'customMax', $event.target.value)"
+                        @change="updateCustom('rank', 'customMax', $event.target.value)"
                         :disabled="local.rank.presetIdx !== -1" />
                 </div>
             </div>
@@ -230,16 +253,23 @@ defineExpose({ activeTags, handleReset })
                         @change="selectCustom('vol')" />
                     <span>自定义</span>
                 </label>
-                <div class="custom-row" :class="{ disabled: local.vol.presetIdx !== -1 }">
-                    <input type="number" class="ci" placeholder="最小"
-                        :value="local.vol.customMin"
-                        @input="updateCustom('vol', 'customMin', $event.target.value)"
-                        :disabled="local.vol.presetIdx !== -1" />
-                    <span class="ci-sep">—</span>
-                    <input type="number" class="ci" placeholder="最大"
-                        :value="local.vol.customMax"
-                        @input="updateCustom('vol', 'customMax', $event.target.value)"
-                        :disabled="local.vol.presetIdx !== -1" />
+                <div class="custom-grid" :class="{ disabled: local.vol.presetIdx !== -1 }">
+                    <div class="custom-field">
+                        <input type="number" class="ci" placeholder="最小"
+                            :value="local.vol.customMin"
+                            @input="updateInput('vol', 'customMin', $event.target.value)"
+                            @change="emitChange()"
+                            :disabled="local.vol.presetIdx !== -1" />
+                        <span class="ci-unit">{{ magnitudeLabel(local.vol.customMin) }}</span>
+                    </div>
+                    <div class="custom-field">
+                        <input type="number" class="ci" placeholder="最大"
+                            :value="local.vol.customMax"
+                            @input="updateInput('vol', 'customMax', $event.target.value)"
+                            @change="emitChange()"
+                            :disabled="local.vol.presetIdx !== -1" />
+                        <span class="ci-unit">{{ magnitudeLabel(local.vol.customMax) }}</span>
+                    </div>
                 </div>
             </div>
 
@@ -266,16 +296,23 @@ defineExpose({ activeTags, handleReset })
                         @change="selectCustom('mc')" />
                     <span>自定义</span>
                 </label>
-                <div class="custom-row" :class="{ disabled: local.mc.presetIdx !== -1 }">
-                    <input type="number" class="ci" placeholder="最小"
-                        :value="local.mc.customMin"
-                        @input="updateCustom('mc', 'customMin', $event.target.value)"
-                        :disabled="local.mc.presetIdx !== -1" />
-                    <span class="ci-sep">—</span>
-                    <input type="number" class="ci" placeholder="最大"
-                        :value="local.mc.customMax"
-                        @input="updateCustom('mc', 'customMax', $event.target.value)"
-                        :disabled="local.mc.presetIdx !== -1" />
+                <div class="custom-grid" :class="{ disabled: local.mc.presetIdx !== -1 }">
+                    <div class="custom-field">
+                        <input type="number" class="ci" placeholder="最小"
+                            :value="local.mc.customMin"
+                            @input="updateInput('mc', 'customMin', $event.target.value)"
+                            @change="emitChange()"
+                            :disabled="local.mc.presetIdx !== -1" />
+                        <span class="ci-unit">{{ magnitudeLabel(local.mc.customMin) }}</span>
+                    </div>
+                    <div class="custom-field">
+                        <input type="number" class="ci" placeholder="最大"
+                            :value="local.mc.customMax"
+                            @input="updateInput('mc', 'customMax', $event.target.value)"
+                            @change="emitChange()"
+                            :disabled="local.mc.presetIdx !== -1" />
+                        <span class="ci-unit">{{ magnitudeLabel(local.mc.customMax) }}</span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -295,7 +332,7 @@ defineExpose({ activeTags, handleReset })
                 <label class="footer-label">涨幅 ≥</label>
                 <input type="number" class="footer-input footer-input-sm" placeholder="%"
                     :value="local.riseMin"
-                    @input="local.riseMin = $event.target.value === '' ? null : Number($event.target.value); emitChange()"
+                    @change="local.riseMin = $event.target.value === '' ? null : Number($event.target.value); emitChange()"
                     min="0" />
             </div>
             <button class="confirm-btn" @click="$emit('close')">确定</button>
@@ -308,7 +345,6 @@ defineExpose({ activeTags, handleReset })
 /* ========== 面板容器 ========== */
 .filter-panel {
 
-    width: 90vw;
     max-width: 720px;
 
     background: #0d1a26;
@@ -449,6 +485,38 @@ defineExpose({ activeTags, handleReset })
     flex-shrink: 0;
 }
 
+/* ========== 自定义堆叠（交易量/市值） ========== */
+.custom-grid {
+    display: flex;
+    flex-direction: row;
+    gap: 4px;
+    margin-top: 6px;
+    padding: 0 6px 4px;
+    transition: opacity 0.15s;
+}
+.custom-grid.disabled {
+    opacity: 0.3;
+    pointer-events: none;
+}
+.custom-field {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+}
+.custom-field .ci {
+    flex: 1;
+}
+.ci-unit {
+    flex-shrink: 0;
+    color: #6a8aa8;
+    font-size: 10px;
+    white-space: nowrap;
+    min-width: 28px;
+    text-align: right;
+}
+
 /* ========== 底部 ========== */
 .panel-footer {
     display: flex;
@@ -554,28 +622,12 @@ defineExpose({ activeTags, handleReset })
 }
 
 /* ========== 窄屏适配 ========== */
-@media (max-width: 1400px) {
-    .filter-panel {
-        width: 300px;
-    }
-    .panel-footer {
-        display: grid;
-        grid-template-columns: 1fr auto;
-        gap: 8px 12px;
-    }
-    .confirm-btn,
-    .reset-btn {
-        width: 100%;
-    }
-}
 
-@media (max-width: 600px) {
+@media (max-width: 500px) {
     .filter-panel {
         width: calc(100vw - 24px);
-        max-width: 340px;
-        padding: 12px 10px 10px;
+        min-width: 300px;
     }
-
     .panel-header {
         margin-bottom: 8px;
     }
@@ -616,6 +668,15 @@ defineExpose({ activeTags, handleReset })
         gap: 2px;
         margin-top: 2px;
     }
+    .custom-grid {
+        flex-direction: column;
+        gap: 4px;
+        padding: 0 4px 2px;
+        margin-top: 2px;
+    }
+    .custom-field {
+        gap: 4px;
+    }
     .ci {
         height: 22px;
         font-size: 11px;
@@ -646,6 +707,18 @@ defineExpose({ activeTags, handleReset })
         height: 26px;
         font-size: 11px;
         padding: 0 12px;
+    }
+        .filter-panel {
+        width: 300px;
+    }
+    .panel-footer {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 8px 12px;
+    }
+    .confirm-btn,
+    .reset-btn {
+        width: 100%;
     }
 }
 </style>

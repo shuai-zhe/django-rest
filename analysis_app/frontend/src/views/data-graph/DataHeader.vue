@@ -244,7 +244,30 @@ function onDocSearchClick(e) {
                 </option>
             </select>
 
-            <!-- 名称搜索（在筛选框旁边） -->
+            <!-- 筛选 -->
+            <div class="filter-area">
+                <button class="filter-btn" @click.stop="togglePanel">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M2 4h12M4 8h8M6 12h4"/>
+                    </svg>
+                    筛选
+                    <span v-if="activeCount > 0" class="filter-badge">{{ activeCount }}</span>
+                    <svg class="arrow" :class="{ open: panelOpen }" width="10" height="6" viewBox="0 0 10 6" fill="none"
+                        stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                        <path d="M1 1l4 4 4-4"/>
+                    </svg>
+                </button>
+                <!-- 弹出面板 — 用 Object.assign 保持 reactive 代理 -->
+                <FilterPanel
+                    v-if="panelOpen"
+                    :model-value="filterState"
+                    @update:model-value="Object.assign(filterState, $event)"
+                    @close="closePanel"
+                    class="panel-instance"
+                />
+            </div>
+            <!-- 名称搜索 -->
             <div class="name-search-wrapper" :class="{ 'ns-expanded': searchExpanded }" @click.stop>
                 <!-- 超窄屏：未展开时的搜索按钮 -->
                 <button class="ns-mobile-btn" @click.stop="expandSearch">
@@ -291,28 +314,6 @@ function onDocSearchClick(e) {
                 <div v-else-if="searchOpen && searchQuery.trim() && searchResults.length === 0" class="ns-dropdown">
                     <div class="ns-empty">无匹配结果</div>
                 </div>
-            </div>
-            <div class="filter-area">
-                <button class="filter-btn" @click.stop="togglePanel">
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"
-                        stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M2 4h12M4 8h8M6 12h4"/>
-                    </svg>
-                    筛选
-                    <span v-if="activeCount > 0" class="filter-badge">{{ activeCount }}</span>
-                    <svg class="arrow" :class="{ open: panelOpen }" width="10" height="6" viewBox="0 0 10 6" fill="none"
-                        stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
-                        <path d="M1 1l4 4 4-4"/>
-                    </svg>
-                </button>
-                <!-- 弹出面板 — 用 Object.assign 保持 reactive 代理 -->
-                <FilterPanel
-                    v-if="panelOpen"
-                    :model-value="filterState"
-                    @update:model-value="Object.assign(filterState, $event)"
-                    @close="closePanel"
-                    class="panel-instance"
-                />
             </div>
         </div>
 
@@ -736,14 +737,14 @@ function onDocSearchClick(e) {
         position: absolute;
         margin-top: 0;
     }
-
-
 }
-  .panel-instance {
+.panel-instance {
     position: fixed;  /* 相对于浏览器窗口 */
     top: 50px;
     left: 20px;
-    width: 100vw;
+    width: 85vw;
     height: 500px;
-  }
+}
+
+
 </style>

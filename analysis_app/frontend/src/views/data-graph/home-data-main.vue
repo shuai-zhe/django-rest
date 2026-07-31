@@ -1,8 +1,11 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 import DataHeader from "./DataHeader.vue"
 import ProjectList from "./ProjectList.vue"
 import AnalysisScatterGraph from "./AnalysisScatterGraph.vue"
+
+const router = useRouter()
 
 // 筛选值（由 DataHeader 面板计算后 emit 上来）
 const rankMin = ref(null)
@@ -15,10 +18,11 @@ const symbols = ref('')
 const riseMin = ref(null)
 const searchName = ref(null)   // 名称搜索选中的 code_id（仅表格）
 
-// 查看详情事件（暂时空处理，待后续实现）
+// 查看详情：跳转到项目详情页（搜索选中、气泡点击、表格点击共用）
 function onViewDetail(item) {
-    // TODO: 跳转详情页 / 弹出详情弹窗
-    console.log('viewDetail', item)
+    const codeId = item?.code_id
+    if (!codeId) return
+    router.push(`/project/${codeId}`)
 }
 
 // 时间维度（由 DataHeader 中的按钮控制）

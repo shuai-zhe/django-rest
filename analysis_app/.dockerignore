@@ -26,7 +26,7 @@ env/
 # 日志
 *.log
 
-# 静态文件收集（通常 build 时单独处理）
+# 静态文件收集（通常 data_build 时单独处理）
 staticfiles/
 
 # Docker

@@ -1,6 +1,9 @@
 <script setup>
 import { ref, watch, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useProjectData } from "@/composables/useProjectData"
+
+const router = useRouter()
 
 // ==================== Props ====================
 const props = defineProps({
@@ -335,7 +338,10 @@ function handleMouseUp(e) {
         const my = e.clientY - rect.top
         const dist = Math.hypot(mx - startMX, my - startMY)
         if (dist < 5) {
+            // 点击气泡 → 跳转项目详情页
             selectedBubble = clickHit
+            const codeId = clickHit?.code_id
+            if (codeId) router.push(`/project/${codeId}`)
         }
     } else {
         selectedBubble = null
@@ -540,11 +546,36 @@ onMounted(() => {
     window.addEventListener('resize', handleResize)
     cleanupFns.push(() => window.removeEventListener('resize', handleResize))
 
+    // ResizeObserver：画布尺寸变化（含返回本页布局定型）后，按新尺寸重建气泡，
+    // 避免用极小尺寸生成气泡后无法修正
+    const buildAtCurrentSize = () => {
+        if (projectListData.value.length > 0) {
+            bubbles = buildBubbles(props.activeTimeFrame)
+            selectedBubble = null
+            draggedBubble = null
+        }
+    }
+    let resizeObserver = null
+    if (typeof ResizeObserver !== 'undefined') {
+        resizeObserver = new ResizeObserver(() => {
+            if (!resizeCanvas()) return
+            buildAtCurrentSize()
+        })
+        resizeObserver.observe(canvas)
+        cleanupFns.push(() => resizeObserver.disconnect())
+    }
+
     // 启动空帧循环（等待数据到达后真正开始绘制）
     animationId = requestAnimationFrame(frame)
 
+    // 数据已缓存（返回本页时 watch 不会重新触发）→ 立即按当前尺寸重建气泡
+    if (projectListData.value.length > 0) {
+        buildAtCurrentSize()
+    }
+
     // 拉取项目数据（共享，只会请求一次），就绪后启动 60s 定时刷新
     fetchData().then(() => {
+        buildAtCurrentSize()
         startAutoRefresh(60000)
     })
 })

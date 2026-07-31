@@ -12,6 +12,13 @@ const router = createRouter({
       // which is lazy-loaded when the route is visited.
       component: () => import('../views/data-graph/home-data-main.vue'),
     },
+
+    // 项目详情页（独立页面，通过路由参数 codeId 展示项目信息 / K线）
+    {
+      path: '/project/:codeId',
+      name: 'project-detail',
+      component: () => import('../views/project-detail/home-project-detail.vue'),
+    },
   ],
 })
 

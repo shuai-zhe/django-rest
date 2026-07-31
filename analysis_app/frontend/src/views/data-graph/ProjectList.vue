@@ -1,6 +1,14 @@
 <script setup>
 import { ref, watch, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useProjectData } from "@/composables/useProjectData"
+
+const router = useRouter()
+
+// 点击项目行 → 跳转详情页
+function goDetail(item) {
+    if (item?.code_id) router.push(`/project/${item.code_id}`)
+}
 
 // ==================== Props ====================
 const props = defineProps({
@@ -211,8 +219,8 @@ watch(
                             <span class="rank-badge">{{ item.extra_info?.rank ?? idx + 1 }}</span>
                         </td>
 
-                        <!-- 名称 -->
-                        <td class="col-name">
+                        <!-- 名称（点击跳转详情） -->
+                        <td class="col-name name-link" @click.stop="goDetail(item)">
                             <span class="name-main">{{ item.name?.toUpperCase() || '' }}</span>
                             <span class="name-sub">{{ item.display_name || item.name }}</span>
                         </td>
@@ -380,18 +388,22 @@ th.col-rank {
     left: -16px;   /* 吃掉 .table-scroll padding-left */
     z-index: 3;
     text-align: center;
-    width: 60px;
+    width: 40px;
 }
 th.col-name {
     position: sticky;
-    left: 44px;    /* 60 - 16 */
+    left: 24px;    /* 40 - 16 */
     z-index: 3;
-    max-width: 100px;
+    max-width: 80px;
 }
 
 /* ---------- 行 ---------- */
 tr {
     transition: background 0.15s;
+}
+
+td.name-link {
+    cursor: pointer;
 }
 
 tbody tr:hover {
@@ -425,25 +437,21 @@ td {
 
 .rank-badge {
     display: inline-block;
-    width: 28px;
-    height: 28px;
-    line-height: 28px;
-    border-radius: 50%;
-    background: #1e3a5f;
     color: #8ba4be;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 700;
     text-align: center;
+    font-variant-numeric: tabular-nums;
 }
 
 /* 名称（冻结列） */
 .col-name {
     position: sticky;
-    left: 44px;    /* 60 - 16 */
+    left: 24px;    /* 40 - 16 */
     z-index: 1;
     background: #0f1923;
     text-align: left;
-    max-width: 100px;
+    max-width: 80px;
     overflow: hidden;
     text-overflow: ellipsis;
     border-right: 1px solid #1e3a5f;
@@ -451,10 +459,10 @@ td {
 
 .name-main {
     display: block;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 700;
     color: #ffffff;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.3px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -462,7 +470,7 @@ td {
 
 .name-sub {
     display: block;
-    font-size: 11px;
+    font-size: 10px;
     color: #6a8aa8;
     margin-top: 1px;
     overflow: hidden;

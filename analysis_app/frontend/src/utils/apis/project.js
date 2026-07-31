@@ -5,3 +5,10 @@ export const ProjectList=()=>{
         "/gate/project"
     )
 }
+
+export const ProjectKline=(params)=>{
+    return request.get(
+        "/gate/project/kline",
+        { params }
+    )
+}
