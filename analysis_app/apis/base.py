@@ -1,10 +1,15 @@
 import requests
 
+from core.utils import io_error_reset
+
 
 class RequestBase:
     def __init__(self, url: str, headers: dict = None, method: str = "GET"):
         self.url = url
-        self.headers = headers or {'Accept': 'application/json', 'Content-Type': 'application/json'}
+        self.headers = headers or {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        }
         self.method = method
         self.params = {}
 
@@ -14,7 +19,7 @@ class RequestBase:
             "url": self.url,
             "headers": self.headers,
             "method": method,
-            **kwargs
+            **kwargs,
         }
         if method == "GET":
             _request_params["params"] = params
@@ -45,6 +50,8 @@ class RequestBase:
             filtered_params[key] = value
         return filtered_params
 
+    # 封装报错尝试重试n次
+    @io_error_reset(reset=3, sleep=0.5)
     def __call__(self, params: dict = None, *args, **kwargs):
         self.params = self.set_params(params)
         return self.request(*args, params=self.params, **kwargs)
