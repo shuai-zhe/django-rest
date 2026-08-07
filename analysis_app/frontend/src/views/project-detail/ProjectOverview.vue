@@ -66,28 +66,36 @@ onUnmounted(() => {
 
 <template>
     <div class="overview-card">
-        <div class="ov-price">
-            <span class="ov-price-value">{{ formatPrice(latestPriceFinal) }}</span>
-            <span class="ov-price-change" :class="pctClass(stats.changePct)">
-                {{ formatPct(stats.changePct) }}
-            </span>
-        </div>
-        <div class="ov-grid">
-            <div class="ov-item">
-                <span class="ov-label">24h 最高</span>
-                <span class="ov-value up">{{ formatPrice(stats.high) }}</span>
+        <!-- 两列布局：左 = 价格/涨幅，右 = 24h 数据（小字体） -->
+        <div class="ov-cols">
+            <!-- 第一列：价格 + 涨幅 -->
+            <div class="ov-col col-price">
+                <div class="ov-price">
+                    <span class="ov-price-value">{{ formatPrice(latestPriceFinal) }}</span>
+                    <span class="ov-price-change" :class="pctClass(stats.changePct)">
+                        {{ formatPct(stats.changePct) }}
+                    </span>
+                </div>
             </div>
-            <div class="ov-item">
-                <span class="ov-label">24h 最低</span>
-                <span class="ov-value down">{{ formatPrice(stats.low) }}</span>
-            </div>
-            <div class="ov-item">
-                <span class="ov-label">24h 成交量</span>
-                <span class="ov-value">{{ formatMoney(volume) }}</span>
-            </div>
-            <div class="ov-item">
-                <span class="ov-label">市值</span>
-                <span class="ov-value">{{ formatMoney(marketCap) }}</span>
+
+            <!-- 第二列：24h 数据（字体小一点） -->
+            <div class="ov-col col-data">
+                <div class="ov-item">
+                    <span class="ov-label">24h 最高</span>
+                    <span class="ov-value up">{{ formatPrice(stats.high) }}</span>
+                </div>
+                <div class="ov-item">
+                    <span class="ov-label">24h 最低</span>
+                    <span class="ov-value down">{{ formatPrice(stats.low) }}</span>
+                </div>
+                <div class="ov-item">
+                    <span class="ov-label">24h 成交量</span>
+                    <span class="ov-value">{{ formatMoney(volume) }}</span>
+                </div>
+                <div class="ov-item">
+                    <span class="ov-label">市值</span>
+                    <span class="ov-value">{{ formatMoney(marketCap) }}</span>
+                </div>
             </div>
         </div>
     </div>
@@ -96,60 +104,83 @@ onUnmounted(() => {
 <style scoped>
 .overview-card {
     background: rgba(13, 26, 38, 0.6);
-    border: 1px solid #1e3a5f;
     border-radius: 10px;
-    padding: 20px 24px;
+    padding: 16px 24px;
 }
+
+/* 两列：左价格/涨幅（较宽），右 24h 数据（紧凑小字） */
+.ov-cols {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+}
+.ov-col {
+    flex: 1;
+}
+.col-price {
+    flex: 1.2;
+}
+.col-data {
+    display: flex;
+    flex-direction: column;   /* 竖着排序 */
+    gap: 8px;
+    flex: 2;
+}
+
 .ov-price {
     display: flex;
-    align-items: baseline;
-    gap: 14px;
-    margin-bottom: 18px;
+    flex-direction: column;      /* 竖着排：价格在上，涨幅在下 */
+    align-items: flex-start;
+    gap: 4px;
 }
 .ov-price-value {
-    font-size: 30px;
+    font-size: 34px;
     font-weight: 700;
     color: #fff;
     font-variant-numeric: tabular-nums;
+    line-height: 1.1;
 }
 .ov-price-change {
-    font-size: 15px;
-    font-weight: 700;
+    font-size: 13px;
+    font-weight: 600;
     font-variant-numeric: tabular-nums;
+    margin-left: 18px;           /* 向右缩进，形成右斜排 */
 }
 .ov-price-change.up { color: #2ecc71; }
 .ov-price-change.down { color: #e74c3c; }
 
-.ov-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 16px;
-}
+/* 24h 数据项：无边框、竖排；标签列固定宽度，数值紧跟 */
 .ov-item {
     display: flex;
-    flex-direction: column;
-    gap: 6px;
-    padding: 12px 16px;
-    background: rgba(15, 25, 35, 0.5);
-    border-radius: 8px;
-    border: 1px solid rgba(30, 58, 95, 0.5);
+    align-items: baseline;
+    gap: 8px;                        /* 标签与数值紧凑 */
+    padding: 4px 0;
 }
 .ov-label {
     font-size: 12px;
     color: #6a8aa8;
+    white-space: nowrap;
+    width: 70px;                     /* 标签列固定 70px */
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 .ov-value {
-    font-size: 16px;
+    font-size: 12px;
     font-weight: 700;
     color: #e0edf5;
     font-variant-numeric: tabular-nums;
+    text-align: left;                /* 数值靠左，紧跟标签 */
+    white-space: nowrap;
 }
 .ov-value.up { color: #2ecc71; }
 .ov-value.down { color: #e74c3c; }
 
+/* 小屏幕：仍保持两列，仅缩小间距 */
 @media (max-width: 700px) {
-    .ov-grid {
-        grid-template-columns: repeat(2, 1fr);
+    .ov-cols {
+        flex-direction: row;
+        align-items: center;
+        gap: 12px;
     }
 }
 </style>

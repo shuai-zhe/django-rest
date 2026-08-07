@@ -30,7 +30,9 @@ onMounted(() => {
     <div class="detail-root">
         <!-- 顶部导航 -->
         <div class="detail-header">
-            <button class="back-btn" @click="goBack">← 返回</button>
+            <button class="back-btn" @click="goBack" title="返回" aria-label="返回">
+                <svg viewBox="0 0 24 24" width="20" height="20"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+            </button>
             <span class="header-title">{{ (project?.name || codeId).toUpperCase() }}</span>
             <span class="header-sub">{{ project?.display_name || '' }}</span>
         </div>
@@ -75,18 +77,21 @@ onMounted(() => {
     z-index: 10;
 }
 .back-btn {
-    padding: 6px 14px;
-    background: #1e3a5f;
-    border: 1px solid #2a5a8f;
-    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 50%;
     color: #c8d8e8;
-    font-size: 13px;
     cursor: pointer;
     transition: all 0.2s;
-    font-family: inherit;
 }
 .back-btn:hover {
-    background: #2a5a8f;
+    background: rgba(30, 58, 95, 0.7);
     color: #fff;
 }
 .header-title {
@@ -101,7 +106,8 @@ onMounted(() => {
 
 /* ---------- 主体 ---------- */
 .detail-body {
-    width: 100%;
+    width: auto;                 /* 由 margin-left 决定可用宽度 */
+    margin-left: 3%;            /* 整体左边距 10% */
     display: flex;
     flex-direction: column;
 }

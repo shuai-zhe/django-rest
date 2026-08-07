@@ -18,7 +18,7 @@ const props = defineProps({
 // ==================== K 线数据（自身请求） ====================
 // 图表内部自行管理当前级别（可被工具栏切换），props.interval 仅作为初始值
 const currentInterval = ref(props.interval || '1m')
-const { kline, intervals, loading, error, startAutoRefresh, stop, bind } =
+const { kline, intervals, loading, loadingEarlier, error, startAutoRefresh, stop, bind, loadEarlier } =
     useKlineData(() => props.codeId, () => currentInterval.value)
 bind()
 
@@ -104,6 +104,9 @@ const DEFAULT_VISIBLE = 80
 const viewStart = ref(0)              // 视口起始绝对索引
 const visibleCount = ref(DEFAULT_VISIBLE) // 当前展示条数
 
+// Y 轴固定刻度：tapActive 拖拽 Scrub 时锁定，首次点击时缓存
+const fixedYDomain = ref(null)
+
 function clampView() {
     const len = kline.value.length
     if (len === 0) { viewStart.value = 0; return }
@@ -115,12 +118,35 @@ function resetView() {
     if (len === 0) return
     visibleCount.value = Math.min(DEFAULT_VISIBLE, len)
     viewStart.value = len - visibleCount.value  // 默认展示最新一段
+    hoverAbs.value = -1
+    tapActive.value = false
+    fixedYDomain.value = null
 }
 
 // 数据刷新后回到最新视口
+let preserveView = false   // 置位时表示本次 kline 变化来自「向前加载」，不回跳最新
 watch(kline, () => {
+    if (preserveView) { preserveView = false; return }
     resetView()
     hoverAbs.value = -1
+    tapActive.value = false
+    fixedYDomain.value = null
+})
+
+// 拖到最早（viewStart 到 0）时向前请求更早数据，并平移视口保持视野
+const loadingMore = ref(false)
+watch(viewStart, async (val) => {
+    if (val > 0 || loadingMore.value || loading.value || loadingEarlier.value) return
+    if (!kline.value.length) return
+    loadingMore.value = true
+    const oldLen = kline.value.length
+    preserveView = true              // 前置合并不该触发 resetView
+    const added = await loadEarlier()
+    const newLen = kline.value.length
+    if (added > 0 && newLen === oldLen + added) {
+        viewStart.value = added      // 原最早一根现在位于 added 处，保持视野
+    }
+    loadingMore.value = false
 })
 
 // 当前可见窗口内的 K 线切片
@@ -145,7 +171,11 @@ function xOfRel(j) {
 }
 
 // 参与 Y 轴定标的所有数值：可见窗口内 K 线最高/最低 + 指标值
+// tapActive 或 scrubMode 拖拽时使用 fixedYDomain 锁定刻度，避免拖拽中 Y 轴跳动
 const yDomain = computed(() => {
+    if ((tapActive.value || scrubMode.value) && fixedYDomain.value) {
+        return fixedYDomain.value
+    }
     const vs = visibleKline.value
     if (!vs.length) return { maxY: 1, minY: 0 }
     let maxH = -Infinity
@@ -249,46 +279,187 @@ function linePath(values) {
     return d
 }
 
-// ==================== 平移 / 缩放 / 十字光标 ====================
+// ==================== 平移 / 缩放 / 十字光标 / 点击 / 拖拽Scrub ====================
 const hoverAbs = ref(-1)
+const tapActive = ref(false)
+const scrubMode = ref(false) // 按住 0.5s 后进入自由移动模式
 const dragging = ref(false)
 let dragState = null
+let lastTapTime = 0
+
+// 拖拽阈值：pointerdown 后移动超过此像素视为拖拽（panning），否则为点击（tap）
+const TAP_THRESHOLD = 5
+// 按住时长：超过此值进入 Scrub 模式（自由移动，锁定视口和 Y 轴）
+const SCRUB_HOLD_MS = 500
+let pointerStartClientX = 0
+let pointerStartClientY = 0
+let pointerMoved = false
+let scrubTimer = null
+// 拖拽/长按结束后会派发 click 事件，用此标志吞掉它，避免误选中蜡烛
+let suppressNextClick = false
+// 长按进度（0 → 1），用于显示环形进度指示器
+const holdProgress = ref(0)
+let holdStartTime = 0
+// 长按指针在 SVG 坐标中的位置（用于进度环定位）
+const holdPointerX = ref(-1)
+const holdPointerY = ref(-1)
 
 function pxToRelIndex(px, rect) {
     const ratio = (px / rect.width) * chartWidth
     return Math.round((ratio - chartPad.left - step.value / 2) / step.value)
 }
 
+function clearScrubTimer() {
+    if (scrubTimer) {
+        clearTimeout(scrubTimer)
+        scrubTimer = null
+    }
+}
+
+// 更新长按进度（供 pointermove 调用）
+function updateHoldProgress() {
+    const elapsed = Date.now() - holdStartTime
+    holdProgress.value = Math.min(1, elapsed / SCRUB_HOLD_MS)
+}
+
 function onPointerDown(e) {
+    pointerStartClientX = e.clientX
+    pointerStartClientY = e.clientY
+    pointerMoved = false
+    suppressNextClick = false
+    scrubMode.value = false
+    holdProgress.value = 0
+    holdStartTime = Date.now()
     dragging.value = true
     dragState = {
         startClientX: e.clientX,
         startViewStart: viewStart.value,
     }
+    // 按住 0.5s 后进入 Scrub 模式（自由移动，锁定视口和 Y 轴）
+    scrubTimer = setTimeout(() => {
+        scrubMode.value = true
+        suppressNextClick = true
+        holdProgress.value = 1
+        // 进入 Scrub 模式时锁定 Y 轴为当前可见范围
+        fixedYDomain.value = yDomain.value
+    }, SCRUB_HOLD_MS)
     e.currentTarget.setPointerCapture?.(e.pointerId)
 }
 function onPointerMove(e) {
     const rect = e.currentTarget.getBoundingClientRect()
-    // 拖动中 → 平移视口
-    if (dragging.value && dragState) {
-        const dxPx = e.clientX - dragState.startClientX
-        const stepPx = (rect.width / chartWidth) * step.value
-        const dBars = Math.round(dxPx / stepPx)
-        viewStart.value = dragState.startViewStart - dBars
-        clampView()
+    if (!dragging.value || !dragState) return
+
+    const dxPx = Math.abs(e.clientX - pointerStartClientX)
+    const dyPx = Math.abs(e.clientY - pointerStartClientY)
+
+    // 首次超过阈值 → 判定为拖拽（panning），取消 Scrub 计时器
+    if (!pointerMoved && (dxPx > TAP_THRESHOLD || dyPx > TAP_THRESHOLD)) {
+        pointerMoved = true
+        suppressNextClick = true
+        clearScrubTimer()
+        holdProgress.value = 0
+    }
+
+    // 更新长按进度（在 Scrub 判定前）
+    if (!scrubMode.value && !pointerMoved) {
+        updateHoldProgress()
+        // 追踪指针在 SVG 坐标中的位置（用于进度环定位）
+        holdPointerX.value = e.clientX - rect.left
+        holdPointerY.value = e.clientY - rect.top
+        // 长按过程中也实时显示当前位置的数据
+        const j = pxToRelIndex(e.clientX - rect.left, rect)
+        const abs = viewStart.value + j
+        hoverAbs.value = (abs >= 0 && abs < kline.value.length) ? abs : -1
+    }
+
+    if (scrubMode.value) {
+        // Scrub 模式：仅跟随手指/鼠标显示数据，不平移视口，Y 轴锁定
+        const j = pxToRelIndex(e.clientX - rect.left, rect)
+        const abs = viewStart.value + j
+        hoverAbs.value = (abs >= 0 && abs < kline.value.length) ? abs : -1
         return
     }
-    // 否则更新悬停十字光标
-    const j = pxToRelIndex(e.clientX - rect.left, rect)
-    const abs = viewStart.value + j
-    hoverAbs.value = (abs >= 0 && abs < kline.value.length) ? abs : -1
+
+    if (pointerMoved) {
+        // 普通拖拽 → 平移视口
+        const stepPx = (rect.width / chartWidth) * step.value
+        const dBars = Math.round((e.clientX - dragState.startClientX) / stepPx)
+        viewStart.value = dragState.startViewStart - dBars
+        clampView()
+    }
+
+    // 非 Scrub 模式且未移动 → 不更新 hoverAbs（等待点击或 Scrub 判定）
 }
 function onPointerUp() {
+    clearScrubTimer()
+    // 退出 Scrub 模式时，若没有 tap 选中则解锁 Y 轴
+    if (scrubMode.value && !tapActive.value) {
+        fixedYDomain.value = null
+    }
+    scrubMode.value = false
     dragging.value = false
     dragState = null
+    pointerMoved = false
+    holdProgress.value = 0
+    holdPointerX.value = -1
+    holdPointerY.value = -1
 }
 function onPointerLeave() {
+    clearScrubTimer()
+    // 退出 Scrub 模式时，若没有 tap 选中则解锁 Y 轴
+    if (scrubMode.value && !tapActive.value) {
+        fixedYDomain.value = null
+    }
+    scrubMode.value = false
+    if (!tapActive.value) {
+        hoverAbs.value = -1
+    }
+    dragging.value = false
+    dragState = null
+    pointerMoved = false
+    holdProgress.value = 0
+    holdPointerX.value = -1
+    holdPointerY.value = -1
+}
+
+// 点击蜡烛 → 选中并持久显示数据（移动端核心交互）
+function onChartClick(e) {
+    // 刚经历过拖拽/长按 Scrub，吞掉这次 click，避免误选中
+    if (suppressNextClick) {
+        suppressNextClick = false
+        return
+    }
+    const rect = e.currentTarget.getBoundingClientRect()
+    if (rect.width === 0) return
+    const j = pxToRelIndex(e.clientX - rect.left, rect)
+    if (isNaN(j)) return
+    const abs = viewStart.value + j
+    if (abs < 0 || abs >= kline.value.length) {
+        // 点击空白区域 → 取消选中
+        tapActive.value = false
+        hoverAbs.value = -1
+        fixedYDomain.value = null
+        return
+    }
+    // 快速连续点击同一根蜡烛 → 取消选中
+    const now = Date.now()
+    if (tapActive.value && hoverAbs.value === abs && now - lastTapTime < 400) {
+        tapActive.value = false
+        hoverAbs.value = -1
+        fixedYDomain.value = null
+        return
+    }
+    lastTapTime = now
+    hoverAbs.value = abs
+    tapActive.value = true
+    // 缓存当前 Y 轴刻度，拖拽 Scrub 时锁定
+    fixedYDomain.value = yDomain.value
+}
+
+function dismissTap() {
+    tapActive.value = false
     hoverAbs.value = -1
+    fixedYDomain.value = null
 }
 
 // 滚轮缩放（以当前视口中心为锚点）
@@ -367,26 +538,28 @@ onUnmounted(() => {
         <div class="chart-head">
             <span class="chart-title">K 线图</span>
 
-            <!-- 工具栏：级别快捷按钮 + 更多面板 + 指标面板 -->
+            <!-- 工具栏：级别分段控件 + 更多面板 + 指标面板 -->
             <div class="toolbar">
-                <!-- 快捷级别 -->
-                <button
-                    v-for="v in quickIntervals"
-                    :key="'q-' + v"
-                    class="tool-btn"
-                    :class="{ active: currentInterval === v }"
-                    @click="selectInterval(v)"
-                >
-                    {{ intervalLabel(v) }}
-                </button>
+                <!-- 快捷级别：连在一起的分段控件，点击高亮 -->
+                <div class="seg">
+                    <span
+                        v-for="v in quickIntervals"
+                        :key="'q-' + v"
+                        class="seg-item"
+                        :class="{ active: currentInterval === v }"
+                        @click="selectInterval(v)"
+                    >
+                        {{ intervalLabel(v) }}
+                    </span>
+                </div>
 
-                <!-- 更多：面板展示全部级别 -->
+                <!-- 更多：图标(＋)面板展示全部级别 -->
                 <div class="tool-drop" @click.stop>
-                    <button class="tool-btn" :class="{ active: showMore }" @click="showMore = !showMore; showIndicators = false">
-                        更多 <span class="caret">▾</span>
+                    <button class="icon-btn" :class="{ active: showMore }" @click="showMore = !showMore; showIndicators = false" title="更多级别">
+                        <svg viewBox="0 0 16 16" width="13" height="13"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/></svg>
                     </button>
                     <transition name="fade">
-                        <div v-if="showMore" class="drop-panel">
+                        <div v-if="showMore" class="drop-panel drop-grid">
                             <button
                                 v-for="v in moreOptions"
                                 :key="'m-' + v"
@@ -400,10 +573,10 @@ onUnmounted(() => {
                     </transition>
                 </div>
 
-                <!-- 指标：面板展示指标勾选项 -->
+                <!-- 指标：图标(折线)面板展示指标勾选项 -->
                 <div class="tool-drop" @click.stop>
-                    <button class="tool-btn" :class="{ active: showIndicators }" @click="showIndicators = !showIndicators; showMore = false">
-                        指标 <span class="caret">▾</span>
+                    <button class="icon-btn" :class="{ active: showIndicators }" @click="showIndicators = !showIndicators; showMore = false" title="指标">
+                        <svg viewBox="0 0 16 16" width="13" height="13"><polyline points="2,12 6,6 9,9 14,3" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 14h12" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
                     </button>
                     <transition name="fade">
                         <div v-if="showIndicators" class="drop-panel">
@@ -449,6 +622,7 @@ onUnmounted(() => {
             @pointerup="onPointerUp"
             @pointerleave="onPointerLeave"
             @wheel.prevent="onWheel"
+            @click="onChartClick"
         >
             <!-- 网格线 + Y 轴价格刻度（最右侧） -->
             <g v-for="t in yTicks" :key="'y' + t.v">
@@ -492,6 +666,27 @@ onUnmounted(() => {
                     stroke="rgba(200,216,232,0.35)" stroke-width="1" stroke-dasharray="2 3" />
                 <rect :x="hover.x - 1" :y="chartPad.top" width="2" :height="plotH" fill="rgba(200,216,232,0.08)" />
             </g>
+
+            <!-- 点击选中高亮 -->
+            <g v-if="tapActive && hover && hover.x === hover.x">
+                <rect :x="hover.x - step.value / 2" :y="chartPad.top" :width="step.value" :height="plotH"
+                    fill="rgba(59,130,196,0.12)" stroke="rgba(59,130,196,0.4)" stroke-width="1" />
+            </g>
+
+            <!-- 长按进度环（按住 0.5s 进入 Scrub 模式前的视觉提示） -->
+            <g v-if="holdProgress > 0 && !scrubMode && holdPointerX >= 0">
+                <circle :cx="holdPointerX" :cy="holdPointerY" r="22"
+                    fill="rgba(59,130,196,0.08)" stroke="none" />
+                <circle :cx="holdPointerX" :cy="holdPointerY" r="18"
+                    fill="none" stroke="rgba(59,130,196,0.12)" stroke-width="3" />
+                <circle :cx="holdPointerX" :cy="holdPointerY" r="18"
+                    fill="none" stroke="rgba(59,130,196,0.9)" stroke-width="3"
+                    :stroke-dasharray="`${2 * Math.PI * 18}`"
+                    :stroke-dashoffset="`${2 * Math.PI * 18 * (1 - holdProgress)}`"
+                    stroke-linecap="round"
+                    transform="rotate(-90, holdPointerX, holdPointerY)"
+                    class="hold-progress-ring" />
+            </g>
         </svg>
 
         <!-- dataZoom 滑条：显示/拖动当前视口在全部数据中的位置 -->
@@ -509,6 +704,11 @@ onUnmounted(() => {
 
         <!-- 悬浮信息栏：OHLC + 指标数值 -->
         <div v-if="hover" class="hover-info">
+            <span v-if="tapActive" class="hi-tap-badge">📌 已选中</span>
+            <span v-if="holdProgress > 0 && !scrubMode" class="hi-tap-badge" style="background: rgba(59,130,196,0.15); border-color: rgba(59,130,196,0.3); color: #6ea8f7;">
+                按住查看
+            </span>
+            <button v-if="tapActive" class="hi-close" @click.stop="dismissTap" title="取消选中">✕</button>
             <span class="hi-time">{{ formatTime(hover.t) }}</span>
             <span class="hi-item">开 {{ formatPrice(hover.o) }}</span>
             <span class="hi-item">高 <b class="up">{{ formatPrice(hover.h) }}</b></span>
@@ -589,6 +789,57 @@ onUnmounted(() => {
     border-color: #3b82c4;
     color: #fff;
 }
+
+/* ---------- 图标按钮（更多 ＋ / 指标 折线） ---------- */
+.icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: #8ba4be;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.icon-btn:hover {
+    color: #e0edf5;
+    background: rgba(30, 58, 95, 0.7);
+}
+.icon-btn.active {
+    background: #1e3a5f;
+    color: #fff;
+}
+
+/* ---------- 分段控件（快捷级别，连在一起点击高亮，无边框） ---------- */
+.seg {
+    display: inline-flex;
+    align-items: stretch;
+    overflow: hidden;
+}
+.seg-item {
+    padding: 4px 12px;
+    font-size: 11px;
+    color: #8ba4be;
+    cursor: pointer;
+    white-space: nowrap;
+    background: transparent;
+    transition: all 0.15s;
+    font-family: inherit;
+    user-select: none;
+}
+.seg-item:hover {
+    color: #e0edf5;
+    background: rgba(30, 58, 95, 0.7);
+}
+.seg-item.active {
+    background: #1e3a5f;
+    color: #fff;
+}
+
 .caret {
     font-size: 9px;
     margin-left: 2px;
@@ -633,6 +884,20 @@ onUnmounted(() => {
 .drop-item.active {
     color: #fff;
     background: #1e3a5f;
+}
+
+/* 更多面板：一行 3 个按钮的网格布局 */
+.drop-grid {
+    width: 156px;
+    min-width: 0;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
+}
+.drop-grid .drop-item {
+    text-align: center;
+    padding: 5px 4px;
+    white-space: nowrap;
 }
 .drop-item.drop-check {
     display: flex;
@@ -743,6 +1008,52 @@ onUnmounted(() => {
 }
 .hover-info .hi-item b.up { color: #2ecc71; }
 .hover-info .hi-item b.down { color: #e74c3c; }
+
+/* ---------- 移动端点击选中样式 ---------- */
+.hi-tap-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    background: rgba(59, 130, 196, 0.25);
+    border: 1px solid rgba(59, 130, 196, 0.5);
+    border-radius: 4px;
+    font-size: 11px;
+    color: #93c5fd;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.hi-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    background: transparent;
+    border: 1px solid rgba(106, 138, 168, 0.4);
+    border-radius: 50%;
+    color: #8ba4be;
+    font-size: 11px;
+    cursor: pointer;
+    line-height: 1;
+    flex-shrink: 0;
+    transition: all 0.15s;
+}
+.hi-close:hover {
+    background: rgba(231, 76, 60, 0.2);
+    border-color: #e74c3c;
+    color: #e74c3c;
+}
+
+/* ---------- 长按进度环动画 ---------- */
+.hold-progress-ring {
+    animation: hold-pulse 0.6s ease-in-out infinite alternate;
+}
+@keyframes hold-pulse {
+    from { stroke-opacity: 0.6; }
+    to { stroke-opacity: 1; }
+}
 
 .chart-state {
     display: flex;

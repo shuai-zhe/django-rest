@@ -47,7 +47,6 @@ export function buildKlineParams({ code_id, interval = '1m', to_date }) {
  *       useKlineData(codeIdGetter, intervalGetter)
  */
 const stores = new Map() // key: `${codeId}:${interval}` -> { kline, intervals, loading, error, timer }
-
 export function useKlineData(codeIdRef, intervalRef) {
     // 兼容三种传参：getter 函数 / ref / 普通值
     const codeId = computed(() => {
@@ -71,6 +70,7 @@ export function useKlineData(codeIdRef, intervalRef) {
                 kline: ref([]),
                 intervals: ref([]),
                 loading: ref(false),
+                loadingEarlier: ref(false),
                 error: ref(''),
                 timer: null,
                 refCount: 0,
@@ -85,6 +85,7 @@ export function useKlineData(codeIdRef, intervalRef) {
     const kline = computed(() => store.value?.kline.value ?? [])
     const intervals = computed(() => store.value?.intervals.value ?? [])
     const loading = computed(() => store.value?.loading.value ?? false)
+    const loadingEarlier = computed(() => store.value?.loadingEarlier.value ?? false)
     const error = computed(() => store.value?.error.value ?? '')
 
     // 拉取 K 线数据（时间窗口自动限制在 MAX_BARS 根柱子内）
@@ -107,6 +108,42 @@ export function useKlineData(codeIdRef, intervalRef) {
         } finally {
             s.loading.value = false
         }
+    }
+
+    /**
+     * 向前加载更早的数据（无限滚动到过去）。
+     * 以当前最早一根时间戳 - 一步长作为 to_date，向后端请求前一个窗口，
+     * 结果按时间升序去重合并后置前。
+     * @returns {Promise<number>} 新增前置的柱子数（供调用方平移视口）
+     */
+    async function loadEarlier() {
+        const key = storeKey.value
+        const s = getStore(key)
+        if (!key || !s) return 0
+        const ks = s.kline.value
+        if (!ks || ks.length === 0) return 0
+        if (s.loadingEarlier.value) return 0
+        const stepSec = INTERVAL_SECONDS[interval.value] ?? 60
+        const toDate = Number(ks[0].t) - stepSec
+        s.loadingEarlier.value = true
+        const oldLen = ks.length
+        try {
+            const params = buildKlineParams({ code_id: codeId.value, interval: interval.value, to_date: toDate })
+            const res = await ProjectKline(params)
+            const raw = res?.data?.kline || res?.kline || []
+            if (Array.isArray(raw) && raw.length) {
+                // 按时间戳去重合并（新数据在前），并升序排序
+                const byT = new Map()
+                raw.forEach(k => byT.set(String(k.t), k))
+                ks.forEach(k => byT.set(String(k.t), k))
+                s.kline.value = [...byT.values()].sort((a, b) => Number(a.t) - Number(b.t))
+            }
+        } catch (e) {
+            console.error('加载更早 K 线失败:', e)
+        } finally {
+            s.loadingEarlier.value = false
+        }
+        return s.kline.value.length - oldLen
     }
 
     // ==================== 24h 统计（基于 K线计算） ====================
@@ -166,10 +203,12 @@ export function useKlineData(codeIdRef, intervalRef) {
         kline,
         intervals,
         loading,
+        loadingEarlier,
         error,
         stats,
         latestPrice,
         loadKline,
+        loadEarlier,
         startAutoRefresh,
         stop,
         bind,

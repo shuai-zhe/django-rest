@@ -7,7 +7,7 @@ const baseURL = import.meta.env.MODE === 'development'
 // 创建axios实例
 const request = axios.create({
   baseURL: baseURL,
-  timeout: 2000
+  timeout: 20000
 })
 
 // axios请求拦截器
