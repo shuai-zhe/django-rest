@@ -1,8 +1,28 @@
 version: '3.8'
 
 services:
+  mysql:
+    image: mysql:8.0
+    container_name: mysql
+    ports:
+      - "3306:3306"
+    volumes:
+      - /opt/mysql/data:/var/lib/mysql
+      - /opt/mysql/conf:/etc/mysql/conf.d
+      - ./mysql/init:/docker-entrypoint-initdb.d
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    env_file:
+      - .env
+    restart: always
+
   redis:
-    image: redis:latest
+    image: redis:7.4-alpine
     container_name: redis
     ports:
       - "6379:6379"
@@ -21,6 +41,7 @@ services:
     ports:
       - "5001:5001"
     depends_on:
+      - mysql
       - redis
     env_file:
       - .env
