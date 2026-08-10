@@ -3,25 +3,6 @@
 # MySQL 首次初始化脚本：在容器启动时自动创建绑定的数据库和账号。
 # 通过 docker-entrypoint-initdb.d 挂载，仅在数据卷为空时执行一次。
 set -e
-
-# 若环境变量不存在则给出默认值
-MYSQL_DATABASE="${MYSQL_DATABASE:-analysis_app}"
-MYSQL_USER="${MYSQL_USER:-analysis}"
-MYSQL_PASSWORD="${MYSQL_PASSWORD:-analysis123456}"
-
-mysql --protocol=socket -uroot -p"$MYSQL_ROOT_PASSWORD" <<-EOSQL
-  CREATE DATABASE IF NOT EXISTS \`${MYSQL_DATABASE}\`
-    CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-
-  CREATE USER IF NOT EXISTS '${MYSQL_USER}'@'%' IDENTIFIED BY '${MYSQL_PASSWORD}';
-  GRANT ALL PRIVILEGES ON \`${MYSQL_DATABASE}\`.* TO '${MYSQL_USER}'@'%';
-  ALTER USER '${MYSQL_USER}'@'%' IDENTIFIED BY '${MYSQL_PASSWORD}';
-  FLUSH PRIVILEGES;
-EOSQL
-
-echo "Database '${MYSQL_DATABASE}' and user '${MYSQL_USER}' are ready."
-
-
 # Django 数据库迁移
 echo "Running Django migrations..."
 python manage.py migrate
@@ -29,14 +10,37 @@ python manage.py makemigrations
 python manage.py migrate
 
 
-# Celery Beat 启动
-echo "Starting Celery Beat..."
-celery -A analysis_app beat --loglevel=info &
+# 启动 Celery 进程守护函数：后台进程异常退出后自动重启，避免容器静默失效
+start_celery() {
+  while true; do
+    echo "[celery-beat] Starting..."
+    celery -A analysis_app beat --loglevel=info &
+    BEAT_PID=$!
 
-# Celery Worker 启动
-echo "Starting Celery Worker..."
-celery -A analysis_app worker --loglevel=info &
+    echo "[celery-worker] Starting..."
+    celery -A analysis_app worker --loglevel=info &
+    WORKER_PID=$!
 
-# Django Shell (进入交互模式)
-echo "Starting Django Shell..."
-python manage.py runserver 0.0.0.0:5001
+    # 等待任一 Celery 进程退出
+    wait -n "$BEAT_PID" "$WORKER_PID"
+    echo "[celery] One of the celery processes exited, restarting in 3s..."
+    # 清理可能残留的进程
+    kill "$BEAT_PID" "$WORKER_PID" 2>/dev/null || true
+    sleep 3
+  done
+}
+
+# 后台启动 Celery 守护
+start_celery &
+
+# Django Web 服务（前台运行，使用 gunicorn 生产级 WSGI 服务器）
+# 使用 exec 使其成为 PID 1，确保 docker stop 等信号能被正确接收，实现优雅关闭
+# --workers 根据 CPU 核数调整，--timeout 避免长请求被误杀
+echo "Starting Django Web Server (gunicorn) on 0.0.0.0:5001..."
+exec gunicorn analysis_app.wsgi:application \
+  --bind 0.0.0.0:5001 \
+  --workers 4 \
+  --worker-class sync \
+  --timeout 120 \
+  --access-logfile - \
+  --error-logfile -

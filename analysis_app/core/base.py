@@ -1,12 +1,9 @@
 # -*- coding: utf-8 -*-
 import abc
 
-from django.http import HttpResponse, JsonResponse
-from rest_framework import serializers, status
 from rest_framework.response import Response
 from rest_framework.serializers import Serializer
 from rest_framework.views import APIView
-from rest_framework.viewsets import GenericViewSet, ViewSet
 
 from core.excepting import ValidateErrorException
 from core.utils import serializer_formatter
@@ -15,8 +12,8 @@ from core.utils import serializer_formatter
 # 定义一个资源类，用于自动校验views视图的入参和返回值校验
 class Resource(APIView, metaclass=abc.ABCMeta):
     # 定义一个资源类，用于自动校验views视图的入参和返回值校验
-    RequestSerializer = None
-    ResponseSerializer = None
+    RequestSerializer: Serializer = None
+    ResponseSerializer: Serializer = None
     many_request_data = False
     method = None
     prefix = None
