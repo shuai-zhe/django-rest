@@ -1,0 +1,50 @@
+version: '3.8'
+
+# 独立的 Elasticsearch 部署文件
+# 启动：docker compose -f deploy_file/docker-compose.es.yml up -d
+# 关闭：docker compose -f deploy_file/docker-compose.es.yml down
+
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4
+    container_name: elasticsearch
+    # 对外 REST API（Django 读写新闻数据走此端口）：宿主机 5001 -> 容器 9200
+    ports:
+      - "5001:9200"
+    volumes:
+      - /opt/elasticsearch/data:/usr/share/elasticsearch/data
+      - /opt/elasticsearch/plugins:/usr/share/elasticsearch/plugins
+    environment:
+      # 单节点模式，适合开发/中小规模新闻存储
+      discovery.type: single-node
+      # 关闭安全认证，简化 Django 连调（生产环境建议开启并配置 TLS/密码）
+      xpack.security.enabled: "false"
+      # JVM 堆内存上限，按宿主机内存调整（建议不超过物理内存 50%）
+      ES_JAVA_OPTS: "-Xms1g -Xmx1g"
+      # 监听所有网卡
+      network.host: "0.0.0.0"
+    # 调整系统限制，避免 "max virtual memory areas" 报错
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    # 关闭 swap，保证 ES 性能
+    privileged: true
+    restart: always
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.13.4
+    container_name: kibana
+    # 可视化/索引管理界面：宿主机 8888 -> 容器 5601
+    ports:
+      - "8888:5601"
+    depends_on:
+      - elasticsearch
+    environment:
+      ELASTICSEARCH_HOSTS: "http://elasticsearch:9200"
+      # 与 ES 保持一致，关闭安全
+      XPACK_SECURITY_ENABLED: "false"
+    restart: always

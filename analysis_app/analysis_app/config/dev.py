@@ -72,3 +72,22 @@ CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
 CELERY_TIMEZONE = "Asia/Shanghai"
 CELERY_ENABLE_UTC = False
 CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
+
+# Elasticsearch Configuration
+# 用于存储/检索新闻数据
+# 容器内访问宿主机映射端口请用 host.docker.internal（Docker 提供的主机网关）
+# 本地直接运行 Django 时可用 127.0.0.1
+ES_HOST = os.environ.get("ES_HOST", "host.docker.internal")
+ES_PORT = os.environ.get("ES_PORT", 5001)
+ES_SCHEME = os.environ.get("ES_SCHEME", "http")
+# 多个节点可用逗号分隔，如 "host1:9200,host2:9200"
+ES_HOSTS = os.environ.get(
+    "ES_HOSTS",
+    f"{ES_SCHEME}://{ES_HOST}:{ES_PORT}",
+)
+# 新闻数据索引名（统一前缀，便于多环境隔离）
+ES_NEWS_INDEX = os.environ.get("ES_NEWS_INDEX", "news")
+# ES 已关闭安全认证，留空即可；如开启鉴权可在此配置
+ES_USERNAME = os.environ.get("ES_USERNAME", "")
+ES_PASSWORD = os.environ.get("ES_PASSWORD", "")
+ES_TIMEOUT = int(os.environ.get("ES_TIMEOUT", 30))
