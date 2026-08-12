@@ -28,6 +28,7 @@ class NewDocument(BaseDocument):
         required=True,
     )
     tag = Keyword(required=False)
+    new_type = Keyword(required=False)
     extra = Object(required=False)
     created_at = Date()
 

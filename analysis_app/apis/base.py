@@ -4,7 +4,7 @@ from core.utils import io_error_reset
 
 
 class RequestBase:
-    def __init__(self, url: str, headers: dict = None, method: str = "GET"):
+    def __init__(self, url: str, headers: dict = None, method: str = "GET",response_formatter=None):
         self.url = url
         self.headers = headers or {
             "Accept": "application/json",
@@ -12,7 +12,14 @@ class RequestBase:
         }
         self.method = method
         self.params = {}
-
+        if response_formatter:
+            self.call_response_formatter = response_formatter
+    def call_response_formatter(self,response):
+        """
+        :param response: 请求结构体
+        :return: 处理后的结构体
+        """
+        return response
     def request(self, params=None, method=None, **kwargs):
         method = method or self.method
         _request_params = {
@@ -54,4 +61,5 @@ class RequestBase:
     @io_error_reset(reset=3, sleep=0.5)
     def __call__(self, params: dict = None, *args, **kwargs):
         self.params = self.set_params(params)
-        return self.request(*args, params=self.params, **kwargs)
+
+        return self.call_response_formatter(self.request(*args, params=self.params, **kwargs))
