@@ -91,3 +91,26 @@ ES_NEWS_INDEX = os.environ.get("ES_NEWS_INDEX", "news")
 ES_USERNAME = os.environ.get("ES_USERNAME", "")
 ES_PASSWORD = os.environ.get("ES_PASSWORD", "")
 ES_TIMEOUT = int(os.environ.get("ES_TIMEOUT", 30))
+ES_CONFIG = {
+    "number_of_shards": 1,
+    "number_of_replicas": 0,
+}
+ES_NEWS_START_TIME = "2026-01-01"
+
+# ---------------------------------------------------------------------------
+# Elasticsearch 连接注册（方向A：仅用 elasticsearch_dsl，未引入 django_elasticsearch_dsl）
+# 集中在本文件书写一次；settings.py 末尾会 import 本模块，故注册早于任何 Document 操作。
+# 后续若扩展为 django_elasticsearch_dsl：
+#   1) 移除本段 connections.configure；
+#   2) 在 INSTALLED_APPS 加入 "django_elasticsearch_dsl"；
+#   3) 在下方声明 ELASTICSEARCH_DSL = {"default": {...}} 即可，其余代码无需改动。
+# ---------------------------------------------------------------------------
+from elasticsearch_dsl import connections as es_connections
+
+_es_client_cfg = {
+    "hosts": ES_HOSTS,
+    "timeout": ES_TIMEOUT,
+}
+if ES_USERNAME and ES_PASSWORD:
+    _es_client_cfg["basic_auth"] = (ES_USERNAME, ES_PASSWORD)
+es_connections.configure(default=_es_client_cfg)
