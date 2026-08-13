@@ -19,6 +19,13 @@ const router = createRouter({
       name: 'project-detail',
       component: () => import('../views/project-detail/home-project-detail.vue'),
     },
+
+    // 新闻独立查询页
+    {
+      path: '/news',
+      name: 'news',
+      component: () => import('../views/news/news-list.vue'),
+    },
   ],
 })
 

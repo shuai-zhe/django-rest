@@ -1,5 +1,6 @@
 <script setup>
 import { ref, reactive, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { useRouter } from 'vue-router'
 import { useProjectData } from "@/composables/useProjectData"
 import FilterPanel from "./FilterPanel.vue"
 
@@ -18,7 +19,13 @@ const emit = defineEmits([
 ])
 
 const { projectListData, progress } = useProjectData()
+const router = useRouter()
 const remaining = computed(() => Math.ceil((1 - progress.value) * 60))
+
+// 跳转到新闻独立页面
+function goNews() {
+    router.push('/news')
+}
 
 // 时间维度按钮配置
 const timeFrameOptions = [
@@ -216,6 +223,7 @@ function onDocSearchClick(e) {
     <div class="data-header">
         <div class="header-left">
             <span class="header-title">AI Trade</span>
+            <button class="nav-news-btn" @click="goNews">新闻</button>
         </div>
 
         <div class="header-center">
@@ -356,6 +364,27 @@ function onDocSearchClick(e) {
     color: #e0edf5;
     letter-spacing: 0.5px;
     white-space: nowrap;
+}
+
+/* 新闻导航按钮 */
+.nav-news-btn {
+    margin-left: 14px;
+    height: 30px;
+    padding: 0 14px;
+    border: 1px solid #1e3a5f;
+    border-radius: 6px;
+    background: rgba(15, 25, 35, 0.6);
+    color: #8ba4be;
+    font-size: 13px;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+.nav-news-btn:hover {
+    border-color: #3b82c4;
+    color: #c8d8e8;
+    background: rgba(30, 58, 95, 0.3);
 }
 
 /* ---- 中：筛选按钮 + 面板锚点 ---- */

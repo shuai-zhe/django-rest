@@ -464,6 +464,8 @@ function dismissTap() {
 
 // 滚轮缩放（以当前视口中心为锚点）
 function onWheel(e) {
+    // 普通滚轮交给 detail-body 做整体滚动；按住 Ctrl/Command 时才缩放图表
+    if (!e.ctrlKey && !e.metaKey) return
     const len = kline.value.length
     if (!len) return
     e.preventDefault()
@@ -621,7 +623,7 @@ onUnmounted(() => {
             @pointermove="onPointerMove"
             @pointerup="onPointerUp"
             @pointerleave="onPointerLeave"
-            @wheel.prevent="onWheel"
+            @wheel="onWheel"
             @click="onChartClick"
         >
             <!-- 网格线 + Y 轴价格刻度（最右侧） -->
@@ -928,7 +930,7 @@ onUnmounted(() => {
     display: block;
     margin: 0 auto;
     cursor: grab;
-    touch-action: none;
+    touch-action: pan-y;
     user-select: none;
 }
 .candle-chart.dragging {

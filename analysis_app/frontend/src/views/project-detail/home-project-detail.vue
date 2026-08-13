@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useProjectData } from "@/composables/useProjectData"
 import ProjectOverview from "./ProjectOverview.vue"
 import KlineChart from "./KlineChart.vue"
+import NewsList from "./NewsList.vue"
 
 const route = useRoute()
 const router = useRouter()
@@ -47,9 +48,9 @@ onMounted(() => {
                 <KlineChart :code-id="codeId" interval="1m" />
             </div>
 
-            <!-- 右列（40%）：预留区域，供后续其它内容展示 -->
+            <!-- 右列（40%）：新闻资讯（嵌入紧凑模式） -->
             <div class="col-side">
-                <!-- 占位提示：后续在此放置其它内容 -->
+                <NewsList :compact="true" :page-size="8" title="新闻资讯" />
             </div>
         </div>
     </div>
@@ -120,12 +121,14 @@ onMounted(() => {
 @media (min-width: 1200px) {
     .detail-body {
         flex-direction: row;
+        align-items: flex-start;   /* 不拉伸子项，新闻按内容高度展开，整页滚动 */
     }
     .col-chart {
         width: 60%;
     }
     .col-side {
         width: 40%;
+        align-self: flex-start;
     }
 }
 </style>
