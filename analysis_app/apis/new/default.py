@@ -39,7 +39,7 @@ class NewApi:
         }
         for item in res.json().get("obj", {}).get("inforList", [])
         if isinstance(item, dict)
-        and (title_content := item.get("content", "").split("火星财经消息，"))
+        and (title_content := item.get("content", "").replace("</p>","").replace("<p>","").split("火星财经消息，"))
         and len(title_content) == 2
     ]
 
