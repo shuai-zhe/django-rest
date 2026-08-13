@@ -1,56 +1,61 @@
 from apis.base import RequestBase
+from core.utils import to_datetime
 
+headers = {
+    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)"
+    " Chrome/150.0.0.0 Safari/537.36 Edg/150.0.0.0",
+}
 new_config = {
     "panews": {
-        "headers": {
-            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36 Edg/150.0.0.0",
-        },
-        "host": "https://universal-api.panewslab.com"
+        "headers": headers,
+        "host": "https://universal-api.panewslab.com",
     },
     "marsbit": {
-        "headers": {
-            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36 Edg/150.0.0.0",
-        },
-        "host": "https://api.marsbit.co"
-    }
+        "headers": headers,
+        "host": "https://api.marsbit.co",
+    },
 }
 
 
 class NewApi:
     # 处理日历
-    CALENDAR_FORMATTER = lambda res: [
+    CALENDAR_FORMATTER = lambda self, res: [
         {
-            "create_at": item["createdAt"],
-            "title": item.get("translations", {}).get("title"),
-            "new_type": "calendar"
+            "created_at": to_datetime(item["createdAt"]),
+            "title": ";".join([_.get("title") for _ in item.get("translations", [])]),
+            "new_type": "calendar",
+            "_id": item.get("id"),
         }
         for item in res.json()
         if isinstance(item, dict)
     ]
-    NEW_FORMATTER = lambda res: [
+    NEW_FORMATTER = lambda self, res: [
         {
-            "create_at": item["createdTime"],
-            "title":title_content[0] ,
+            "created_at": to_datetime(item["createdTime"]),
+            "title": title_content[0],
             "content": title_content[1],
-            "new_type": "new"
+            "new_type": "new",
+            "_id": item.get("id"),
         }
-        for item in res.json().get("obj",{}).get("inforList",[])
+        for item in res.json().get("obj", {}).get("inforList", [])
         if isinstance(item, dict)
-           and
-           (title_content := item.get("translations", {}).get("title", "").split("火星财经消息，"))
-           and
-           len(title_content)==2
+        and (title_content := item.get("content", "").split("火星财经消息，"))
+        and len(title_content) == 2
     ]
 
     def __init__(self):
         # ?take=100&skip=0&startAt=between,2026-06-27T16:00:00.000Z,2026-08-08T15:59:59.999Z
-        self.calendar = RequestBase(url=new_config["panews"]["host"] + "/calendar/events?take=100&skip=0&startAt=between,2026-06-27T16:00:00.000Z,2026-08-08T15:59:59.999Z",
-                                    headers=new_config["panews"]["headers"],
-                                    response_formatter=self.CALENDAR_FORMATTER
-                                    )
+        self.calendar = RequestBase(
+            url=new_config["panews"]["host"] + "/calendar/events",
+            headers=new_config["panews"]["headers"],
+            response_formatter=self.CALENDAR_FORMATTER,
+        )
+        # ?currentPage=1&pageSize=20&channelId=21&passportid=&lang=zh-CN
+        self.new = RequestBase(
+            url=new_config["marsbit"]["host"] + "/info/lives/showlives",
+            headers=new_config["marsbit"]["headers"],
+            response_formatter=self.NEW_FORMATTER,
+        )
 
-        self.new = RequestBase(url=new_config["marsbit"]["host"] + "info/lives/showlives",
-                               headers=new_config["marsbit"]["headers"],
-                               response_formatter=self.NEW_FORMATTER)
 
-_NewApi=NewApi()
+_NewApi = NewApi()
