@@ -2,8 +2,8 @@ import time
 
 import pandas as pd
 from django.conf import settings
-from elasticsearch_dsl import Document, connections
 from elasticsearch.helpers import bulk
+from elasticsearch_dsl import Document, connections
 
 # 方向A：不引入 django_elasticsearch_dsl，仅用 elasticsearch_dsl 的 connections 注册 default 连接。
 # 放在模块导入阶段，确保任何 Document（save/bulk/search）使用前连接已就绪，
@@ -84,10 +84,25 @@ class BaseDocument(Document):
         return super().search(using=using, index=date_index)
 
     @classmethod
+    def ensure_index(cls, index):
+        """
+        确保分区索引存在：不存在时按 class Index 的 settings/mapping（含 IK）
+        显式建好；已存在则直接跳过。避免 bulk 自动建索引导致 IK 配置丢失。
+        内部调用 elasticsearch_dsl 的 init() —— 它会 clone(name=index).save()，
+        clone 用分区名造一个 Index 对象，save 才真正连 ES 落 analysis 配置。
+        """
+        if not cls._get_connection().indices.exists(index=index):
+            cls.init(index=index)
+
+    @classmethod
     def bulk_save(cls, docs, chunk_size=500):
         # bulk是一个能够批量创建的函数，能够对dict或者document进行批量创建；
         # 这里主要是对数据进行分区格式创建
         actions = []
+        # 收集本次写入涉及的所有分区索引，写入前先显式 init() 建好（带 Index.settings 中的
+        # IK analysis 配置）。若不 init() 而依赖 ES 自动建索引，analysis 配置不会写入 mapping，
+        # 字段上 analyzer="ik_max_word" 找不到对应分析器，会回退为默认 standard（逐字切分）。
+        index_names = set()
         for d in docs:
             if isinstance(d, dict):
                 doc = cls(**d)
@@ -97,11 +112,15 @@ class BaseDocument(Document):
             # 若 meta 未带 _index，则按 doc 内容兜底计算（如直接传 Document 实例时）
             if "_index" not in doc.meta:
                 doc.meta["_index"] = cls.reset_index_(doc)
+            index_names.add(doc.meta["_index"])
             doc_todict = doc.to_dict(include_meta=True)
             # to_dict(include_meta=True) 导出的 _index 取自 class Index.name（固定 "news"），
             # 必须手动覆盖为分区后的月份索引，否则全部写入单一索引 news
             doc_todict["_index"] = doc.meta["_index"]
             actions.append(doc_todict)
+        # 对每个分区索引显式建索引（已存在则忽略），确保 IK 分词配置生效
+        for idx in index_names:
+            cls.ensure_index(idx)
         return bulk(
             cls._get_connection(),
             actions,

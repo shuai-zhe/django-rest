@@ -2,6 +2,8 @@ import os
 from pathlib import Path
 from urllib.parse import quote_plus
 
+from elasticsearch_dsl import connections as es_connections
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 # Mysql Configuration
@@ -91,9 +93,18 @@ ES_NEWS_INDEX = os.environ.get("ES_NEWS_INDEX", "news")
 ES_USERNAME = os.environ.get("ES_USERNAME", "")
 ES_PASSWORD = os.environ.get("ES_PASSWORD", "")
 ES_TIMEOUT = int(os.environ.get("ES_TIMEOUT", 30))
+ES_IK_ANALYZER = {
+    "analysis": {
+        "analyzer": {
+            "ik_max_word": {"type": "ik_max_word"},
+            "ik_smart": {"type": "ik_smart"},
+        }
+    }
+}
 ES_CONFIG = {
     "number_of_shards": 1,
     "number_of_replicas": 0,
+    **ES_IK_ANALYZER,
 }
 ES_NEWS_START_TIME = "2026-01-01"
 
@@ -105,7 +116,6 @@ ES_NEWS_START_TIME = "2026-01-01"
 #   2) 在 INSTALLED_APPS 加入 "django_elasticsearch_dsl"；
 #   3) 在下方声明 ELASTICSEARCH_DSL = {"default": {...}} 即可，其余代码无需改动。
 # ---------------------------------------------------------------------------
-from elasticsearch_dsl import connections as es_connections
 
 _es_client_cfg = {
     "hosts": ES_HOSTS,

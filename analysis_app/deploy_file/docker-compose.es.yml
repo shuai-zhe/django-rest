@@ -1,19 +1,26 @@
-version: '3.8'
-
 # 独立的 Elasticsearch 部署文件
-# 启动：docker compose -f deploy_file/docker-compose.es.yml up -d
-# 关闭：docker compose -f deploy_file/docker-compose.es.yml down
+# 启动：docker compose -f docker-compose.es.yml up -d
+# 关闭：docker compose -f docker-compose.es.yml down
 
 services:
   elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4
+    # 使用自定义 Dockerfile 构建的镜像，已内置 IK 中文分词插件（analysis-ik 8.13.4）
+    build:
+      context: .
+      dockerfile: Dockerfile.es
+    # 显式指定构建镜像名，避免 compose 用项目名(目录名)拼装镜像名时出现
+    # invalid reference format（如目录名含下划线 docker_ -> docker_-elasticsearch）
+    image: es-ik:8.13.4
     container_name: elasticsearch
     # 对外 REST API（Django 读写新闻数据走此端口）：宿主机 5001 -> 容器 9200
     ports:
       - "5001:9200"
     volumes:
       - /opt/elasticsearch/data:/usr/share/elasticsearch/data
-      - /opt/elasticsearch/plugins:/usr/share/elasticsearch/plugins
+      # 注意：不要挂载 plugins 目录到宿主，否则 bind mount 会遮盖镜像内置的
+      # IK 插件（Dockerfile.es 已安装 analysis-ik 8.13.4 到镜像层），导致
+      # analyzer [ik_max_word] not found。IK 以镜像为唯一可信源。
+      # - /opt/elasticsearch/plugins:/usr/share/elasticsearch/plugins
     environment:
       # 单节点模式，适合开发/中小规模新闻存储
       discovery.type: single-node
