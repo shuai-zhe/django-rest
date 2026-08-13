@@ -15,15 +15,15 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import path,include
-from rest_framework.routers import SimpleRouter
+from django.urls import include, path
+
 # 使用drf自带路由定义
 # router = SimpleRouter()
 # router.register('gate',views.GateView)
 # urlpatterns += router.urls
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
-    path('gate/', include('modules.gate.urls', namespace='gate')),
-
+    path("admin/", admin.site.urls),
+    path("gate/", include("modules.gate.urls", namespace="gate")),
+    path("new/", include("modules.new.urls", namespace="new")),
 ]

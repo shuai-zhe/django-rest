@@ -52,9 +52,11 @@ class BaseDocument(Document):
         )
 
     def build_all_index(self, use_index_list: list = None):
+        # 必须用索引名字符串拼接通配，不能用 Index 对象（否则拼出非法索引名导致查不到）
+        base = self._index._name
         if use_index_list:
             return [f"{_index}_*" for _index in use_index_list]
-        return f"{self._index}_*"
+        return f"{base}_*"
 
     def search(
         self,
