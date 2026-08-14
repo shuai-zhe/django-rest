@@ -12,12 +12,12 @@ import { PRESETS, createIndicator } from "./indicators"
  */
 const props = defineProps({
     codeId: { type: String, required: true },
-    interval: { type: String, default: '1m' },
+  interval: { type: String, default: '15m' },
 })
 
 // ==================== K 线数据（自身请求） ====================
 // 图表内部自行管理当前级别（可被工具栏切换），props.interval 仅作为初始值
-const currentInterval = ref(props.interval || '1m')
+const currentInterval = ref(props.interval || '15m')
 const { kline, intervals, loading, loadingEarlier, error, startAutoRefresh, stop, bind, loadEarlier } =
     useKlineData(() => props.codeId, () => currentInterval.value)
 bind()
@@ -162,6 +162,14 @@ const fontScale = computed(() => isSmallScreen.value ? 2 : 1)
 const yAxisFontSize = computed(() => 10 * fontScale.value)
 const yAxisHoverPriceFontSize = computed(() => 8 * fontScale.value)
 const yAxisHoverRateFontSize = computed(() => 8 * fontScale.value)
+// 右侧悬浮价格气泡尺寸：小屏放大，且宽度限制在右 margin(140) 内不越界、不压柱体
+const yAxisHoverW = computed(() => isSmallScreen.value ? 128 : 104)
+const yAxisHoverH = computed(() => isSmallScreen.value ? 60 : 40)
+const yAxisHoverRx = computed(() => isSmallScreen.value ? 13 : 9)
+const yAxisHoverTip = computed(() => isSmallScreen.value ? 10 : 7)
+const yAxisHoverPadX = computed(() => isSmallScreen.value ? 16 : 11)
+const yAxisHoverPriceY = computed(() => isSmallScreen.value ? 25 : 17)
+const yAxisHoverRateY = computed(() => isSmallScreen.value ? 47 : 34)
 const tooltipW = computed(() => 168 * fontScale.value)
 const tooltipH = computed(() => 158 * fontScale.value)
 const tooltipPadX = computed(() => 10 * fontScale.value)
@@ -609,8 +617,6 @@ onUnmounted(() => {
 <template>
     <div class="chart-card">
         <div class="chart-head">
-            <span class="chart-title">K 线图</span>
-
             <!-- 工具栏：级别分段控件 + 更多面板 + 指标面板 -->
             <div class="toolbar">
                 <!-- 快捷级别：连在一起的分段控件，点击高亮 -->
@@ -742,10 +748,11 @@ onUnmounted(() => {
                 <line :x1="chartPad.left" :y1="hover.y" :x2="chartWidth - chartPad.right" :y2="hover.y"
                     stroke="rgba(200,216,232,0.26)" stroke-width="1" stroke-dasharray="2 3" />
                 <rect :x="hover.x - 1" :y="chartPad.top" width="2" :height="plotH" fill="rgba(200,216,232,0.08)" />
-                <g class="y-axis-hover-label" :transform="`translate(${chartWidth - chartPad.right + 4}, ${hover.yAxisLabelY - 20})`">
-                    <rect :class="hover.priceDiffUp ? 'y-axis-hover-bg up' : 'y-axis-hover-bg down'" width="104" height="40" rx="4" />
-                    <text class="y-axis-hover-price" x="8" y="16" :style="{ fontSize: yAxisHoverPriceFontSize + 'px' }">{{ formatPrice(hover.currentPrice) }}</text>
-                    <text class="y-axis-hover-rate" x="8" y="34" :style="{ fontSize: yAxisHoverRateFontSize + 'px' }">{{ formatPercent(hover.priceDiffRate) }}</text>
+                <g class="y-axis-hover-label" :transform="`translate(${chartWidth - chartPad.right + yAxisHoverTip}, ${hover.yAxisLabelY - yAxisHoverH / 2})`">
+                    <polygon :class="hover.priceDiffUp ? 'y-axis-hover-arrow up' : 'y-axis-hover-arrow down'" :points="`-${yAxisHoverTip},${yAxisHoverH / 2} 0,${yAxisHoverH / 2 - yAxisHoverH * 0.18} 0,${yAxisHoverH / 2 + yAxisHoverH * 0.18}`" />
+                    <rect :class="hover.priceDiffUp ? 'y-axis-hover-bg up' : 'y-axis-hover-bg down'" x="0" y="0" :width="yAxisHoverW" :height="yAxisHoverH" :rx="yAxisHoverRx" />
+                    <text class="y-axis-hover-price" :x="yAxisHoverPadX" :y="yAxisHoverPriceY" :style="{ fontSize: yAxisHoverPriceFontSize + 'px' }">{{ formatPrice(hover.currentPrice) }}</text>
+                    <text class="y-axis-hover-rate" :class="hover.priceDiffUp ? 'up' : 'down'" :x="yAxisHoverPadX" :y="yAxisHoverRateY" :style="{ fontSize: yAxisHoverRateFontSize + 'px' }">{{ formatPercent(hover.priceDiffRate) }}</text>
                 </g>
             </g>
 
@@ -1024,24 +1031,36 @@ onUnmounted(() => {
     font-variant-numeric: tabular-nums;
 }
 .y-axis-hover-bg {
-    stroke-width: 1;
+    stroke-width: 1.5;
 }
 .y-axis-hover-bg.up {
-    fill: rgb(46, 204, 113);
+    fill: #172230;
     stroke: rgb(46, 204, 113);
 }
 .y-axis-hover-bg.down {
-    fill: rgb(231, 76, 60);
+    fill: #172230;
     stroke: rgb(231, 76, 60);
 }
+.y-axis-hover-arrow {
+    stroke: none;
+}
+.y-axis-hover-arrow.up,
+.y-axis-hover-arrow.down {
+    fill: #172230;
+}
 .y-axis-hover-price {
-    fill: #e0edf5;
+    fill: #e8f1f8;
     font-size: 8px;
     font-weight: 700;
 }
 .y-axis-hover-rate {
-    fill: #c8d8e8;
     font-size: 8px;
+}
+.y-axis-hover-rate.up {
+    fill: rgb(46, 204, 113);
+}
+.y-axis-hover-rate.down {
+    fill: rgb(231, 76, 60);
 }
 .chart-tooltip {
     pointer-events: none;

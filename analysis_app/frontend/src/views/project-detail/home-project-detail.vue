@@ -45,7 +45,7 @@ onMounted(() => {
                 <ProjectOverview :code-id="codeId" />
 
                 <!-- K 线图子组件：自身请求 K 线数据并绘制蜡烛图 -->
-                <KlineChart :code-id="codeId" interval="1m" />
+<KlineChart :code-id="codeId" interval="15m" />
             </div>
 
             <!-- 右列（40%）：新闻资讯（嵌入紧凑模式） -->
