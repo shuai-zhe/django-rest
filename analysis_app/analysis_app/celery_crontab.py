@@ -10,12 +10,12 @@ app.conf.beat_schedule = {
     },
     "get-marsbit-market-data": {
         "task": "get_marsbit_market_data_sync",
-        "schedule": crontab(minute="*/1"),
+        "schedule": crontab(minute="*/10"),
         "args": (),
     },
     "get-calendar-data": {
         "task": "get_calendar_data_sync",
-        "schedule": crontab(minute="*/1"),
+        "schedule": crontab(minute="*/240"),
         "args": (),
     },
 }
