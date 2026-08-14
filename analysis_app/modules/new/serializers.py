@@ -12,3 +12,8 @@ class NewSearchSerializer(PageSerializer):
         label="新闻类型",
         default="new",
     )
+
+
+class NewDetailSerializer(serializers.Serializer):
+    # 新闻详情：按 ES 文档 id 查询单条
+    id = serializers.CharField(required=True, label="新闻ID")

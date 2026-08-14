@@ -1,4 +1,5 @@
 from core.documents.new import NewDocument
+from core.tasks.gate.init_update_project import logger
 
 # 新闻内部固定标签，不向接口与响应暴露
 # 参与关键字分词检索的字段
@@ -60,3 +61,31 @@ class NewService:
             )
 
         return {"total": total, "list": news_list}
+
+    def get_new_detail(self, id):
+        """
+        查询单条新闻详情（按 ES 文档 id）。
+        :param id: ES 文档 id
+        :return: dict -> 单条新闻（含 extra，热度等扩展字段存放在 extra 中）
+        """
+        try:
+            # 数据按月分区写入 news_YYYY-MM，.get() 默认查 class Index.name("news") 会 404，
+            # 因此走 search(all_index=True) 查 news_* 通配索引，并按文档 id 过滤取单条。
+            s = NewDocument().search(all_index=True).filter("ids", values=[id])
+            response = s.execute()
+            if not response.hits:
+                return None
+            hit = response.hits[0]
+        except Exception as e:
+            # 索引未找到 / 文档不存在等
+            logger.error(e)
+            return None
+
+        return {
+            "id": hit.meta.id,
+            "title": getattr(hit, "title", ""),
+            "content": getattr(hit, "content", ""),
+            "new_type": getattr(hit, "new_type", ""),
+            "extra": getattr(hit, "extra", {}) or {},
+            "created_at": getattr(hit, "created_at", None),
+        }
