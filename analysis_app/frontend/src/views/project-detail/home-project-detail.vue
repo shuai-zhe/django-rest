@@ -50,7 +50,7 @@ onMounted(() => {
 
             <!-- 右列（40%）：新闻资讯（嵌入紧凑模式） -->
             <div class="col-side">
-                <NewsList :compact="true" :page-size="8" title="新闻资讯" />
+                <NewsList :compact="true" :page-size="8" title="新闻资讯" :keyword="project?.name || ''" :keyword-mode="true" />
             </div>
         </div>
     </div>

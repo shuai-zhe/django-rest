@@ -11,3 +11,11 @@ import request from "../request"
 export const NewList = (params = {}) => {
     return request.get("/new/list", { params })
 }
+
+/**
+ * 新闻详情查询（按 ES 文档 id）
+ * @param {string} id 新闻 id
+ */
+export const NewDetail = (id) => {
+    return request.get("/new/detail", { params: { id } })
+}

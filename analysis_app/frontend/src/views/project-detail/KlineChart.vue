@@ -58,11 +58,9 @@ function onDocClick() {
 }
 onMounted(() => {
     document.addEventListener('click', onDocClick)
-    startAutoRefresh()
 })
 onUnmounted(() => {
     document.removeEventListener('click', onDocClick)
-    stop()
 })
 
 // ==================== 指标（独立注册表） ====================
@@ -156,11 +154,26 @@ const visibleKline = computed(() =>
 
 // ==================== SVG 几何配置 ====================
 const chartWidth = 820
-const chartHeight = 380
-const chartPad = { top: 20, right: 76, bottom: 40, left: 12 }
+const baseChartHeight = 380
+const isSmallScreen = ref(false)
+const chartHeight = computed(() => isSmallScreen.value ? baseChartHeight * 1.5 : baseChartHeight)
+const chartPad = { top: 20, right: 140, bottom: 40, left: 12 }
+const fontScale = computed(() => isSmallScreen.value ? 2 : 1)
+const yAxisFontSize = computed(() => 10 * fontScale.value)
+const yAxisHoverPriceFontSize = computed(() => 8 * fontScale.value)
+const yAxisHoverRateFontSize = computed(() => 8 * fontScale.value)
+const tooltipW = computed(() => 168 * fontScale.value)
+const tooltipH = computed(() => 158 * fontScale.value)
+const tooltipPadX = computed(() => 10 * fontScale.value)
+const tooltipTitleY = computed(() => 22 * fontScale.value)
+const tooltipRowYs = computed(() => [46, 68, 90, 112, 134].map(y => y * fontScale.value))
+const tooltipBadgeX = computed(() => 118 * fontScale.value)
+const tooltipTitleFontSize = computed(() => 12 * fontScale.value)
+const tooltipRowFontSize = computed(() => 11 * fontScale.value)
+const tooltipBadgeFontSize = computed(() => 10 * fontScale.value)
 
 const plotW = computed(() => chartWidth - chartPad.left - chartPad.right)
-const plotH = computed(() => chartHeight - chartPad.top - chartPad.bottom)
+const plotH = computed(() => chartHeight.value - chartPad.top - chartPad.bottom)
 
 const step = computed(() => plotW.value / visibleCount.value)
 // 蜡烛宽度随缩放自适应，避免密集时重叠
@@ -203,6 +216,13 @@ function yOf(v) {
     const { maxY, minY } = yDomain.value
     const totalRange = (maxY - minY) || 1
     return chartPad.top + ((maxY - v) / totalRange) * plotH.value
+}
+
+function priceOfY(y) {
+    const { maxY, minY } = yDomain.value
+    const totalRange = (maxY - minY) || 1
+    const clampedY = Math.min(chartHeight.value - chartPad.bottom, Math.max(chartPad.top, y))
+    return maxY - ((clampedY - chartPad.top) / plotH.value) * totalRange
 }
 
 const candleData = computed(() => {
@@ -303,6 +323,8 @@ let holdStartTime = 0
 // 长按指针在 SVG 坐标中的位置（用于进度环定位）
 const holdPointerX = ref(-1)
 const holdPointerY = ref(-1)
+const hoverPointerX = ref(-1)
+const hoverPointerY = ref(-1)
 
 function pxToRelIndex(px, rect) {
     const ratio = (px / rect.width) * chartWidth
@@ -320,6 +342,18 @@ function clearScrubTimer() {
 function updateHoldProgress() {
     const elapsed = Date.now() - holdStartTime
     holdProgress.value = Math.min(1, elapsed / SCRUB_HOLD_MS)
+}
+
+function updateHoverFromPointer(e) {
+    const rect = e.currentTarget.getBoundingClientRect()
+    if (rect.width === 0 || rect.height === 0) return
+    const svgX = ((e.clientX - rect.left) / rect.width) * chartWidth
+    const svgY = ((e.clientY - rect.top) / rect.height) * chartHeight.value
+    hoverPointerX.value = svgX
+    hoverPointerY.value = svgY
+    const j = pxToRelIndex(e.clientX - rect.left, rect)
+    const abs = viewStart.value + j
+    hoverAbs.value = (abs >= 0 && abs < kline.value.length) ? abs : -1
 }
 
 function onPointerDown(e) {
@@ -347,7 +381,10 @@ function onPointerDown(e) {
 }
 function onPointerMove(e) {
     const rect = e.currentTarget.getBoundingClientRect()
-    if (!dragging.value || !dragState) return
+    if (!dragging.value || !dragState) {
+        updateHoverFromPointer(e)
+        return
+    }
 
     const dxPx = Math.abs(e.clientX - pointerStartClientX)
     const dyPx = Math.abs(e.clientY - pointerStartClientY)
@@ -364,19 +401,15 @@ function onPointerMove(e) {
     if (!scrubMode.value && !pointerMoved) {
         updateHoldProgress()
         // 追踪指针在 SVG 坐标中的位置（用于进度环定位）
-        holdPointerX.value = e.clientX - rect.left
-        holdPointerY.value = e.clientY - rect.top
+        holdPointerX.value = ((e.clientX - rect.left) / rect.width) * chartWidth
+        holdPointerY.value = ((e.clientY - rect.top) / rect.height) * chartHeight.value
         // 长按过程中也实时显示当前位置的数据
-        const j = pxToRelIndex(e.clientX - rect.left, rect)
-        const abs = viewStart.value + j
-        hoverAbs.value = (abs >= 0 && abs < kline.value.length) ? abs : -1
+        updateHoverFromPointer(e)
     }
 
     if (scrubMode.value) {
         // Scrub 模式：仅跟随手指/鼠标显示数据，不平移视口，Y 轴锁定
-        const j = pxToRelIndex(e.clientX - rect.left, rect)
-        const abs = viewStart.value + j
-        hoverAbs.value = (abs >= 0 && abs < kline.value.length) ? abs : -1
+        updateHoverFromPointer(e)
         return
     }
 
@@ -413,6 +446,8 @@ function onPointerLeave() {
     scrubMode.value = false
     if (!tapActive.value) {
         hoverAbs.value = -1
+        hoverPointerX.value = -1
+        hoverPointerY.value = -1
     }
     dragging.value = false
     dragState = null
@@ -438,6 +473,8 @@ function onChartClick(e) {
         // 点击空白区域 → 取消选中
         tapActive.value = false
         hoverAbs.value = -1
+        hoverPointerX.value = -1
+        hoverPointerY.value = -1
         fixedYDomain.value = null
         return
     }
@@ -446,6 +483,8 @@ function onChartClick(e) {
     if (tapActive.value && hoverAbs.value === abs && now - lastTapTime < 400) {
         tapActive.value = false
         hoverAbs.value = -1
+        hoverPointerX.value = -1
+        hoverPointerY.value = -1
         fixedYDomain.value = null
         return
     }
@@ -459,13 +498,13 @@ function onChartClick(e) {
 function dismissTap() {
     tapActive.value = false
     hoverAbs.value = -1
+    hoverPointerX.value = -1
+    hoverPointerY.value = -1
     fixedYDomain.value = null
 }
 
 // 滚轮缩放（以当前视口中心为锚点）
 function onWheel(e) {
-    // 普通滚轮交给 detail-body 做整体滚动；按住 Ctrl/Command 时才缩放图表
-    if (!e.ctrlKey && !e.metaKey) return
     const len = kline.value.length
     if (!len) return
     e.preventDefault()
@@ -500,11 +539,31 @@ const hover = computed(() => {
     if (abs < 0 || !ks || !ks[abs]) return null
     const k = ks[abs]
     const j = abs - viewStart.value
+    const pointerX = Number.isFinite(hoverPointerX.value) ? hoverPointerX.value : xOfRel(j)
+    const pointerY = Number.isFinite(hoverPointerY.value) ? hoverPointerY.value : chartPad.top
+    const y = Math.min(chartHeight.value - chartPad.bottom, Math.max(chartPad.top, pointerY))
+    const yAxisPrice = priceOfY(y)
+    const closePrice = Number(k.c)
+    const priceDiffRate = closePrice ? ((yAxisPrice - closePrice) / closePrice) * 100 : 0
+    const tooltipMargin = 10
+    const plotMidX = chartPad.left + plotW.value / 2
+    const currentTooltipW = tooltipW.value
+    const tooltipX = pointerX <= plotMidX
+        ? chartWidth - chartPad.right - currentTooltipW - tooltipMargin
+        : chartPad.left + tooltipMargin
+    const tooltipY = chartPad.top + tooltipMargin
     const out = {
         idx: abs,
         x: xOfRel(j),
+        y,
+        yAxisLabelY: Math.min(chartHeight.value - chartPad.bottom - 10, Math.max(chartPad.top + 10, y)),
+        tooltipX,
+        tooltipY,
+        currentPrice: yAxisPrice,
+        priceDiffRate,
+        priceDiffUp: priceDiffRate >= 0,
         t: ks[abs].t,
-        o: Number(k.o), c: Number(k.c), h: Number(k.h), l: Number(k.l),
+        o: Number(k.o), c: closePrice, h: Number(k.h), l: Number(k.l),
         indicators: [],
     }
     overlayLines.value.forEach(line => {
@@ -521,16 +580,28 @@ function formatPrice(v) {
     if (v >= 1) return '$' + Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     return '$' + Number(v).toFixed(6)
 }
+function formatPercent(v) {
+    if (v == null || isNaN(v)) return '-'
+    const sign = v > 0 ? '+' : ''
+    return sign + Number(v).toFixed(2) + '%'
+}
 function formatTime(t) {
     const d = new Date(Number(t) * 1000)
     return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
+function updateSmallScreen() {
+    isSmallScreen.value = window.matchMedia('(max-width: 768px)').matches
+}
+
 // ==================== 生命周期 ====================
 onMounted(() => {
+    updateSmallScreen()
+    window.addEventListener('resize', updateSmallScreen)
     startAutoRefresh()
 })
 onUnmounted(() => {
+    window.removeEventListener('resize', updateSmallScreen)
     stop()
 })
 </script>
@@ -626,11 +697,13 @@ onUnmounted(() => {
             @wheel="onWheel"
             @click="onChartClick"
         >
+            <rect class="chart-hit-area" x="0" y="0" :width="chartWidth" :height="chartHeight" />
+
             <!-- 网格线 + Y 轴价格刻度（最右侧） -->
             <g v-for="t in yTicks" :key="'y' + t.v">
                 <line :x1="chartPad.left" :y1="t.y" :x2="chartWidth - chartPad.right" :y2="t.y"
                     stroke="rgba(30,58,95,0.5)" stroke-width="1" />
-                <text :x="chartWidth - chartPad.right + 8" :y="t.y + 4" text-anchor="start" class="axis-text">
+                <text :x="chartWidth - chartPad.right + 8" :y="t.y + 4" text-anchor="start" class="axis-text" :style="{ fontSize: yAxisFontSize + 'px' }">
                     {{ formatPrice(t.v) }}
                 </text>
             </g>
@@ -666,13 +739,28 @@ onUnmounted(() => {
             <g v-if="hover">
                 <line :x1="hover.x" :y1="chartPad.top" :x2="hover.x" :y2="chartHeight - chartPad.bottom"
                     stroke="rgba(200,216,232,0.35)" stroke-width="1" stroke-dasharray="2 3" />
+                <line :x1="chartPad.left" :y1="hover.y" :x2="chartWidth - chartPad.right" :y2="hover.y"
+                    stroke="rgba(200,216,232,0.26)" stroke-width="1" stroke-dasharray="2 3" />
                 <rect :x="hover.x - 1" :y="chartPad.top" width="2" :height="plotH" fill="rgba(200,216,232,0.08)" />
+                <g class="y-axis-hover-label" :transform="`translate(${chartWidth - chartPad.right + 4}, ${hover.yAxisLabelY - 20})`">
+                    <rect :class="hover.priceDiffUp ? 'y-axis-hover-bg up' : 'y-axis-hover-bg down'" width="104" height="40" rx="4" />
+                    <text class="y-axis-hover-price" x="8" y="16" :style="{ fontSize: yAxisHoverPriceFontSize + 'px' }">{{ formatPrice(hover.currentPrice) }}</text>
+                    <text class="y-axis-hover-rate" x="8" y="34" :style="{ fontSize: yAxisHoverRateFontSize + 'px' }">{{ formatPercent(hover.priceDiffRate) }}</text>
+                </g>
             </g>
 
-            <!-- 点击选中高亮 -->
-            <g v-if="tapActive && hover && hover.x === hover.x">
-                <rect :x="hover.x - step.value / 2" :y="chartPad.top" :width="step.value" :height="plotH"
-                    fill="rgba(59,130,196,0.12)" stroke="rgba(59,130,196,0.4)" stroke-width="1" />
+            <!-- 当前蜡烛高亮：仅保留竖线十字，不再绘制蓝色背景块 -->
+
+            <!-- K 线 tooltip：OHLC + 当前 Y 轴价格 -->
+            <g v-if="hover && Number.isFinite(hover.tooltipX)" class="chart-tooltip" :transform="`translate(${hover.tooltipX}, ${hover.tooltipY})`">
+                <rect class="tooltip-bg" :width="tooltipW" :height="tooltipH" rx="6" />
+                <text class="tooltip-title" :x="tooltipPadX" :y="tooltipTitleY" :style="{ fontSize: tooltipTitleFontSize + 'px' }">{{ formatTime(hover.t) }}</text>
+                <text class="tooltip-row" :x="tooltipPadX" :y="tooltipRowYs[0]" :style="{ fontSize: tooltipRowFontSize + 'px' }">当前价：{{ formatPrice(hover.currentPrice) }}</text>
+                <text class="tooltip-row" :x="tooltipPadX" :y="tooltipRowYs[1]" :style="{ fontSize: tooltipRowFontSize + 'px' }">开盘：{{ formatPrice(hover.o) }}</text>
+                <text class="tooltip-row" :x="tooltipPadX" :y="tooltipRowYs[2]" :style="{ fontSize: tooltipRowFontSize + 'px' }">收盘：{{ formatPrice(hover.c) }}</text>
+                <text class="tooltip-row tooltip-up" :x="tooltipPadX" :y="tooltipRowYs[3]" :style="{ fontSize: tooltipRowFontSize + 'px' }">最高：{{ formatPrice(hover.h) }}</text>
+                <text class="tooltip-row tooltip-down" :x="tooltipPadX" :y="tooltipRowYs[4]" :style="{ fontSize: tooltipRowFontSize + 'px' }">最低：{{ formatPrice(hover.l) }}</text>
+                <text v-if="tapActive" class="tooltip-badge" :x="tooltipBadgeX" :y="tooltipTitleY" :style="{ fontSize: tooltipBadgeFontSize + 'px' }">已选中</text>
             </g>
 
             <!-- 长按进度环（按住 0.5s 进入 Scrub 模式前的视觉提示） -->
@@ -686,7 +774,7 @@ onUnmounted(() => {
                     :stroke-dasharray="`${2 * Math.PI * 18}`"
                     :stroke-dashoffset="`${2 * Math.PI * 18 * (1 - holdProgress)}`"
                     stroke-linecap="round"
-                    transform="rotate(-90, holdPointerX, holdPointerY)"
+                    :transform="`rotate(-90, ${holdPointerX}, ${holdPointerY})`"
                     class="hold-progress-ring" />
             </g>
         </svg>
@@ -704,26 +792,13 @@ onUnmounted(() => {
             <div class="dz-hint">{{ visibleCount }} / {{ kline.length }} 根（拖动平移，滚轮缩放）</div>
         </div>
 
-        <!-- 悬浮信息栏：OHLC + 指标数值 -->
-        <div v-if="hover" class="hover-info">
+        <!-- 固定选中/长按提示，不再承载行情数据 -->
+        <div v-if="tapActive || (holdProgress > 0 && !scrubMode)" class="hover-info">
             <span v-if="tapActive" class="hi-tap-badge">📌 已选中</span>
             <span v-if="holdProgress > 0 && !scrubMode" class="hi-tap-badge" style="background: rgba(59,130,196,0.15); border-color: rgba(59,130,196,0.3); color: #6ea8f7;">
                 按住查看
             </span>
             <button v-if="tapActive" class="hi-close" @click.stop="dismissTap" title="取消选中">✕</button>
-            <span class="hi-time">{{ formatTime(hover.t) }}</span>
-            <span class="hi-item">开 {{ formatPrice(hover.o) }}</span>
-            <span class="hi-item">高 <b class="up">{{ formatPrice(hover.h) }}</b></span>
-            <span class="hi-item">低 <b class="down">{{ formatPrice(hover.l) }}</b></span>
-            <span class="hi-item">收 {{ formatPrice(hover.c) }}</span>
-            <span
-                v-for="(ind, ii) in hover.indicators"
-                :key="'hi-' + ii"
-                class="hi-item"
-                :style="{ color: ind.color }"
-            >
-                {{ ind.name }} {{ formatPrice(ind.value) }}
-            </span>
         </div>
 
         <!-- 图例（指标 + 涨跌） -->
@@ -936,9 +1011,67 @@ onUnmounted(() => {
 .candle-chart.dragging {
     cursor: grabbing;
 }
+.chart-hit-area {
+    fill: transparent;
+    pointer-events: all;
+}
 .axis-text {
     fill: #6a8aa8;
     font-size: 10px;
+}
+.y-axis-hover-label {
+    pointer-events: none;
+    font-variant-numeric: tabular-nums;
+}
+.y-axis-hover-bg {
+    stroke-width: 1;
+}
+.y-axis-hover-bg.up {
+    fill: rgb(46, 204, 113);
+    stroke: rgb(46, 204, 113);
+}
+.y-axis-hover-bg.down {
+    fill: rgb(231, 76, 60);
+    stroke: rgb(231, 76, 60);
+}
+.y-axis-hover-price {
+    fill: #e0edf5;
+    font-size: 8px;
+    font-weight: 700;
+}
+.y-axis-hover-rate {
+    fill: #c8d8e8;
+    font-size: 8px;
+}
+.chart-tooltip {
+    pointer-events: none;
+    font-variant-numeric: tabular-nums;
+}
+.tooltip-bg {
+    fill: rgba(8, 16, 24, 0.92);
+    stroke: rgba(59, 130, 196, 0.55);
+    stroke-width: 1;
+    filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.35));
+}
+.tooltip-title {
+    fill: #e0edf5;
+    font-size: 12px;
+    font-weight: 700;
+}
+.tooltip-row {
+    fill: #c8d8e8;
+    font-size: 11px;
+}
+.tooltip-up {
+    fill: #2ecc71;
+}
+.tooltip-down {
+    fill: #e74c3c;
+}
+.tooltip-badge {
+    fill: #93c5fd;
+    font-size: 10px;
+    font-weight: 700;
 }
 
 /* ---------- dataZoom 滑条 ---------- */
@@ -1004,13 +1137,6 @@ onUnmounted(() => {
     color: #c8d8e8;
     font-variant-numeric: tabular-nums;
 }
-.hover-info .hi-time {
-    color: #8ba4be;
-    font-weight: 700;
-}
-.hover-info .hi-item b.up { color: #2ecc71; }
-.hover-info .hi-item b.down { color: #e74c3c; }
-
 /* ---------- 移动端点击选中样式 ---------- */
 .hi-tap-badge {
     display: inline-flex;

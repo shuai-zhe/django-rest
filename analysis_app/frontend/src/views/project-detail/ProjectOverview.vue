@@ -134,7 +134,7 @@ onUnmounted(() => {
     gap: 4px;
 }
 .ov-price-value {
-    font-size: 34px;
+    font-size: 12px;
     font-weight: 700;
     color: #fff;
     font-variant-numeric: tabular-nums;
@@ -175,12 +175,26 @@ onUnmounted(() => {
 .ov-value.up { color: #2ecc71; }
 .ov-value.down { color: #e74c3c; }
 
-/* 小屏幕：仍保持两列，仅缩小间距 */
+/* 小屏幕：仍保持两列，仅缩小间距，price:data = 4:6
+   注意：原比例 1.2:2≈37.5%:62.5%，4:6=40%:60%，视觉差异很小（仅 2.5%）
+   本媒体查询基于视口宽度，需窗口/设备宽度 ≤ 700px 才会触发 */
 @media (max-width: 700px) {
     .ov-cols {
-        flex-direction: row;
-        align-items: center;
-        gap: 12px;
+        flex-direction: row !important;
+        align-items: center !important;
+        gap: 12px !important;
+    }
+    .ov-cols .ov-col {
+        flex: none !important;
+    }
+    .ov-cols .col-price {
+        flex: 4 1 0 !important;
+    }
+    .ov-cols .col-data {
+        flex: 6 1 0 !important;
+    }
+    .ov-cols .ov-price-value {
+        font-size: 15px !important;
     }
 }
 </style>

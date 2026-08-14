@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, watch, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { NewList } from "@/utils/apis/new"
 
 const props = defineProps({
@@ -9,7 +10,21 @@ const props = defineProps({
     pageSize: { type: Number, default: 0 },
     // 标题
     title: { type: String, default: '新闻资讯' },
+    // 关键字（详情页嵌入时由父级传入当前项目名作为检索词）
+    keyword: { type: String, default: '' },
+    // 是否以父级 keyword 作为检索条件（详情页传 true，避免挂载时空 keyword 先发一次请求；独立页不传）
+    keywordMode: { type: Boolean, default: false },
+    // 列表项是否可点击跳转详情（父级可关闭）
+    clickable: { type: Boolean, default: true },
 })
+
+const router = useRouter()
+
+// 点击列表项 → 跳转新闻详情页
+function onItemClick(item) {
+    if (!props.clickable || !item?.id) return
+    router.push(`/news/${item.id}`)
+}
 
 // ==================== 查询状态 ====================
 const keyword = ref('')
@@ -30,8 +45,10 @@ const TYPE_OPTIONS = [
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
 
 function buildParams() {
+    // 父级传入的关键字（详情页项目名）优先；否则使用本地搜索框输入
+    const kw = (props.keyword || keyword.value).trim()
     return {
-        keyword: keyword.value.trim() || undefined,
+        keyword: kw || undefined,
         new_type: newType.value || undefined,
         page: page.value,
         page_size: pageSize.value,
@@ -96,7 +113,25 @@ function shortContent(s, len = 80) {
 }
 
 // ==================== 生命周期 ====================
-onMounted(fetchList)
+// keywordMode（详情页）：依赖父级异步传入的 keyword，挂载时若已有值则请求，否则等待 watch 命中后再请求，避免空 keyword 的冗余请求
+// 非 keywordMode（独立页）：挂载即请求（使用本地搜索框输入）
+onMounted(() => {
+    if (props.keywordMode) {
+        if (props.keyword && props.keyword.trim()) fetchList()
+    } else {
+        fetchList()
+    }
+})
+// 父级传入的关键字（详情页项目名）变化（含异步加载完成）时重新检索
+watch(
+    () => props.keyword,
+    (kw) => {
+        if (kw && kw.trim()) {
+            page.value = 1
+            fetchList()
+        }
+    }
+)
 // 紧凑模式嵌入时，若父级需要刷新可监听（保留接口）
 defineExpose({ refresh: fetchList })
 onUnmounted(() => { /* 无定时器 */ })
@@ -151,13 +186,15 @@ onUnmounted(() => { /* 无定时器 */ })
 
         <!-- 列表 -->
         <ul v-else class="news-list">
-            <li v-for="item in list" :key="item.id" class="news-item">
+            <li v-for="item in list" :key="item.id" class="news-item" :class="{ clickable }"
+                @click="onItemClick(item)">
                 <div class="ni-top">
                     <span class="ni-title">{{ item.title }}</span>
                 </div>
-                <p v-if="!compact && item.content" class="ni-content">{{ shortContent(item.content) }}</p>
+                <p v-if="item.content" class="ni-content">{{ shortContent(item.content, 140) }}</p>
                 <div class="ni-meta">
                     <span class="ni-time">{{ formatTime(item.created_at) }}</span>
+                    <span v-if="clickable" class="ni-more" @click.stop="onItemClick(item)">详情 ›</span>
                 </div>
             </li>
         </ul>
@@ -297,6 +334,13 @@ onUnmounted(() => { /* 无定时器 */ })
     padding: 10px 0;
     border-bottom: 1px solid rgba(30, 58, 95, 0.5);
 }
+.news-item.clickable {
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.news-item.clickable:hover {
+    background: rgba(30, 58, 95, 0.25);
+}
 .news-item:last-child { border-bottom: none; }
 .ni-top {
     display: flex;
@@ -319,24 +363,57 @@ onUnmounted(() => { /* 无定时器 */ })
     font-size: 12px;
     font-weight: 500;
 }
+/* 紧凑模式（详情页嵌入）：内容预览更紧凑 */
+.news-card.compact .ni-content {
+    margin-top: 4px;
+    font-size: 11px;
+    line-height: 1.45;
+    max-height: 40px;
+    -webkit-line-clamp: 2;
+}
+.news-card.compact .ni-meta {
+    margin-top: 4px;
+}
+.news-card.compact .ni-time {
+    font-size: 10px;
+}
+.news-card.compact .ni-more {
+    font-size: 10px;
+}
+.news-card.compact .news-item {
+    padding: 8px 0;
+}
 .ni-content {
     margin: 6px 0 0;
     font-size: 12px;
     color: #8ba4be;
     line-height: 1.5;
+    /* 内容超过 50px 高度截断，其余以省略号收起 */
+    max-height: 50px;
     overflow: hidden;
     text-overflow: ellipsis;
     display: -webkit-box;
-    -webkit-line-clamp: 2;
+    -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
 }
 .ni-meta {
     margin-top: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
 }
 .ni-time {
     font-size: 11px;
     color: #6a8aa8;
 }
+.ni-more {
+    font-size: 11px;
+    color: #6ea8f7;
+    cursor: pointer;
+    user-select: none;
+    transition: color 0.15s;
+}
+.ni-more:hover { color: #9cc4fb; text-decoration: underline; }
 
 /* 分页 */
 .news-pager {
