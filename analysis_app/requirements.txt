@@ -65,3 +65,4 @@ zope-interface==8.5
 gunicorn==23.0.0
 elasticsearch==7.17.12
 elasticsearch-dsl==7.4.1
+akshare==1.18.91

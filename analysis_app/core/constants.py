@@ -1,5 +1,3 @@
-import abc
-from abc import ABC
 from enum import Enum
 from typing import Any
 
@@ -38,6 +36,30 @@ class ProjectStatus(ChoiceMixin):
         map_ = {
             ProjectStatus.SPOT: "现货",
             ProjectStatus.FUTURES: "合约",
+        }
+        return map_[self]
+
+
+class StockProjectStatus(ChoiceMixin):
+    SPOT = "spot"
+
+    @property
+    def translate(self):
+        map_ = {
+            ProjectStatus.SPOT: "现货",
+        }
+        return map_[self]
+
+
+class StockType(ChoiceMixin):
+    SH = "sh"
+    SZ = "sz"
+
+    @property
+    def translate(self):
+        map_ = {
+            StockType.SH: "上交所",
+            StockType.SZ: "深交所",
         }
         return map_[self]
 
