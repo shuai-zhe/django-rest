@@ -1,32 +1,40 @@
 import { ref } from 'vue'
 import { ProjectList } from "@/utils/apis/project"
 
-// 模块级单例——所有组件共享同一份数据
-const projectListData = ref([])
-const loading = ref(false)
-const progress = ref(0)     // 0‑1, 平滑更新供进度条使用
-let fetchPromise = null
-let autoRefreshTimerId = null
-let progressRafId = null
-let refreshStartTime = null
-let refreshIntervalMs = 60000
-let refreshRefCount = 0     // 引用计数：多个组件启用时不会重复开定时器
+/**
+ * 按作用域隔离的数据实例池。
+ * 首页（气泡图 / 表格 / 头部 / 筛选面板）共享同一个 'home' 实例（全量数据），
+ * 详情页（容器 / 概览）共享同一个 'detail' 实例（按 code_id 拉取的单条），
+ * 两者完全独立，详情页拉单条不会污染首页全量数据，反之亦然。
+ */
+const stores = {}
 
-export function useProjectData() {
-    /**
-     * 获取项目数据
-     * @param {boolean} force  true=强制重新请求(用于后台刷新), false=有缓存时直接返回
-     */
-    const fetchData = (force = false) => {
-        if (!force && projectListData.value.length > 0) return Promise.resolve(projectListData.value)
-        if (fetchPromise) return fetchPromise
+function createStore() {
+    const projectListData = ref([])
+    const loading = ref(false)
+    const progress = ref(0)     // 0‑1, 平滑更新供进度条使用
+
+    // 以下状态均按 scope 独立，互不干扰
+    let fetchPromise = null
+    let autoRefreshTimerId = null
+    let progressRafId = null
+    let refreshStartTime = null
+    let refreshIntervalMs = 60000
+    let refreshRefCount = 0     // 引用计数：同作用域内多个组件启用时不会重复开定时器
+    let refreshParams = {}      // 自动刷新时透传给后端的查询参数（如 { code_id } / { id }）
+
+    const fetchData = (force = false, params = {}) => {
+        const hasParams = Object.keys(params || {}).length > 0
+        // 仅在没有显式参数且已有缓存时直接返回，避免带参请求被无参缓存拦截
+        if (!force && !hasParams && projectListData.value.length > 0) return Promise.resolve(projectListData.value)
+        if (fetchPromise && !force) return fetchPromise
 
         loading.value = true
-        fetchPromise = ProjectList()
+        fetchPromise = ProjectList(params)
             .then(res => {
-                const raw = res.data || []
-                projectListData.value = raw
-                return raw
+                // 无论带参与否，都整体替换本作用域的数据（各作用域独立，无需 upsert）
+                projectListData.value = res.data || []
+                return projectListData.value
             })
             .catch(err => {
                 console.error('获取项目数据失败:', err)
@@ -39,7 +47,7 @@ export function useProjectData() {
         return fetchPromise
     }
 
-    // ==================== 60s 定时刷新 ====================
+    // ==================== 定时刷新 ====================
 
     /** 平滑更新 progress */
     function progressLoop() {
@@ -50,12 +58,14 @@ export function useProjectData() {
     }
 
     /**
-     * 启动自动刷新（引用计数，可被多个组件安全调用）
+     * 启动自动刷新（同作用域内引用计数，可被多个组件安全调用）
      * @param {number} intervalMs  刷新间隔，默认 60000
+     * @param {object} params      刷新时透传给后端的查询参数，如 { code_id } / { id }
      */
-    const startAutoRefresh = (intervalMs = 60000) => {
+    const startAutoRefresh = (intervalMs = 60000, params = {}) => {
         refreshRefCount++
         if (refreshRefCount > 1) return // 已有定时器在运行
+        refreshParams = params || {}
 
         refreshIntervalMs = intervalMs
         refreshStartTime = Date.now()
@@ -64,12 +74,12 @@ export function useProjectData() {
         progressRafId = requestAnimationFrame(progressLoop)
 
         autoRefreshTimerId = setInterval(() => {
-            fetchData(true) // force = true，强制刷新
+            fetchData(true, refreshParams) // force = true，强制刷新；带参数则只刷新指定项目
             refreshStartTime = Date.now()
         }, intervalMs)
     }
 
-    /** 停止自动刷新（引用计数） */
+    /** 停止自动刷新（同作用域引用计数） */
     const stopAutoRefresh = () => {
         refreshRefCount--
         if (refreshRefCount > 0) return // 还有其他组件在使用
@@ -83,6 +93,7 @@ export function useProjectData() {
         }
         refreshStartTime = null
         progress.value = 0
+        refreshParams = {}
     }
 
     return {
@@ -93,4 +104,13 @@ export function useProjectData() {
         startAutoRefresh,
         stopAutoRefresh,
     }
+}
+
+/**
+ * 获取（或创建）某作用域的项目数据实例。
+ * @param {string} scope 作用域标识：'home' = 首页全量数据，'detail' = 详情页单条数据
+ */
+export function useProjectData(scope = 'home') {
+    if (!stores[scope]) stores[scope] = createStore()
+    return stores[scope]
 }

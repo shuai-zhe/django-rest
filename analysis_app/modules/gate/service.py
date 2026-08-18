@@ -8,7 +8,11 @@ class GateService:
         return obj.values()
 
     def get_project_all(self, **kwargs):
-        return self.formatter(Project.objects.all())
+        _ = Project.objects.filter()
+        filter_format = kwargs.get("filter_format", {})
+        if filter_format:
+            _ = _.filter(**filter_format)
+        return self.formatter(_)
 
     def get_kline_all(self, validated_data, **kwargs):
         # 后续封装自动查找和错误切换

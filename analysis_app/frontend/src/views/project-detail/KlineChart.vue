@@ -365,6 +365,11 @@ function updateHoverFromPointer(e) {
 }
 
 function onPointerDown(e) {
+    // 多指场景（双指缩放）：放弃单指平移，交还给浏览器处理 pinch-zoom
+    if (!e.isPrimary || dragging.value) {
+        onPointerUp(e)
+        return
+    }
     pointerStartClientX = e.clientX
     pointerStartClientY = e.clientY
     pointerMoved = false
@@ -796,7 +801,7 @@ onUnmounted(() => {
             <div class="dz-track">
                 <div class="dz-window" :style="{ left: sliderLeftPct + '%', width: sliderWidthPct + '%' }"></div>
             </div>
-            <div class="dz-hint">{{ visibleCount }} / {{ kline.length }} 根（拖动平移，滚轮缩放）</div>
+            <div class="dz-hint">{{ visibleCount }} / {{ kline.length }} 根（拖动平移，滚轮/双指缩放）</div>
         </div>
 
         <!-- 固定选中/长按提示，不再承载行情数据 -->
@@ -1012,7 +1017,9 @@ onUnmounted(() => {
     display: block;
     margin: 0 auto;
     cursor: grab;
-    touch-action: pan-y;
+    /* pan-y: 纵向滚动交给浏览器；横向单指拖拽由 pointer 事件自行平移；
+       pinch-zoom: 放行双指缩放手势，使小屏幕下可用双指放大/缩小 K 图 */
+    touch-action: pan-y pinch-zoom;
     user-select: none;
 }
 .candle-chart.dragging {

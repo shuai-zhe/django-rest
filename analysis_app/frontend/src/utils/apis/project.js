@@ -1,8 +1,9 @@
 import request from "../request"
 
-export const ProjectList=()=>{
+export const ProjectList=(params = {})=>{
     return request.get( 
-        "/gate/project"
+        "/gate/project",
+        { params }
     )
 }
 
