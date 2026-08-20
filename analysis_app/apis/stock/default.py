@@ -9,7 +9,7 @@ import baostock as bs
 import pandas as pd
 from pandas import DataFrame
 
-from core.constants import KlineInterval, StockProjectStatus, StockType
+from core.constants import StockProjectStatus, StockType
 
 DEFAULT_DIFF_INTERVAL = {
     "d": 100,
@@ -24,6 +24,7 @@ DEFAULT_DIFF_INTERVAL = {
 class StockResource(abc.ABC):
     def extra_info(self, data, **kwargs) -> dict:
         symbols = {}
+        origin_data = kwargs.get("origin_data", {}) or data
         code_type = data.get("code_type")
         if code_type:
             code_type = getattr(StockType, str(code_type).upper(), None)
@@ -35,8 +36,8 @@ class StockResource(abc.ABC):
             "rank": "-",
             "symbols": symbols,
             "performance": {
-                KlineInterval.D1.value: data.get("涨跌幅", 0),
-                KlineInterval.D1.value.upper(): data.get("振幅", 0),
+                "day": origin_data.get("涨跌幅", 0),
+                "abs_day": origin_data.get("振幅", 0),
             },
         }
 
@@ -57,16 +58,16 @@ class StockResource(abc.ABC):
             "code_id": code_value,
             "code_type": code_type,
             "price_dict": {
-                StockProjectStatus.SPOT.name: data.get("最新价"),
+                StockProjectStatus.SPOT.value: data.get("最新价"),
             },
             "volume_dict": {
-                StockProjectStatus.SPOT.name: data.get("成交量"),
+                StockProjectStatus.SPOT.value: data.get("成交量"),
             },
             "market_cap_dict": {
-                StockProjectStatus.SPOT.name: data.get("成交额"),
+                StockProjectStatus.SPOT.value: data.get("成交额"),
             },
         }
-        format_data["extra_info"] = self.extra_info(format_data)
+        format_data["extra_info"] = self.extra_info(format_data, origin_data=data)
         return format_data
 
     def stock_kline_format(self, data: list | dict | DataFrame, *args, **kwargs):
@@ -186,4 +187,6 @@ class BaoStockResource(StockResource):
 if __name__ == "__main__":
     # data = BaoStockResource().stock_kline("sh.600000", "d", "2026-01-01", "2026-05-01")
     # df = pd.DataFrame(AkShareStockResource().stock_list())#.to_csv("./tests.csv")
-    print(AkShareStockResource().stock_list())
+    # print(AkShareStockResource().stock_list())
+
+    print(ak.stock_zh_a_spot())
