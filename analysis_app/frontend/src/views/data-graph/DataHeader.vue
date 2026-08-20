@@ -3,9 +3,11 @@ import { ref, reactive, computed, watch, onMounted, onUnmounted, nextTick } from
 import { useRouter } from 'vue-router'
 import { useProjectData } from "@/composables/useProjectData"
 import FilterPanel from "./FilterPanel.vue"
+import ControlPanel from "./ControlPanel.vue"
 
 const props = defineProps({
     activeTimeFrame: { type: String, default: 'day' },
+    dataType:        { type: String, default: 'gate' },
 })
 
 const emit = defineEmits([
@@ -14,11 +16,12 @@ const emit = defineEmits([
     'update:volMin', 'update:volMax',
     'update:symbols', 'update:riseMin',
     'update:activeTimeFrame',
+    'update:dataType',
     'update:searchName',
     'viewDetail',
 ])
 
-const { projectListData, progress } = useProjectData()
+const { projectListData, progress, dataType, setDataType } = useProjectData()
 const router = useRouter()
 const remaining = computed(() => Math.ceil((1 - progress.value) * 60))
 
@@ -47,9 +50,32 @@ const panelOpen = ref(false)
 function togglePanel() { panelOpen.value = !panelOpen.value }
 function closePanel()  { panelOpen.value = false }
 
+// ==================== 控制面板（设置 / 过滤 / 功能） ====================
+const ctrlOpen = ref(false)
+function toggleCtrl() { ctrlOpen.value = !ctrlOpen.value }
+function closeCtrl()  { ctrlOpen.value = false }
+
+// 主题（示例：可后续扩展为真实换肤）
+const theme = ref('dark')
+function onThemeChange(t) { theme.value = t }
+
+// 数据源切换（股票 / 货币）：更新单例并重新拉取，再向上通知
+function onDataTypeChange(t) {
+    setDataType(t)
+    emit('update:dataType', t)
+}
+
+// 控制面板内导航
+function onNavigate(name) {
+    closeCtrl()
+    if (name === 'news') goNews()
+    else if (name === 'home') router.push('/')
+}
+
 // 点击外部关闭
 function onDocClick(e) {
     if (panelOpen.value) closePanel()
+    if (ctrlOpen.value) closeCtrl()
 }
 function onResize() {
     if (window.innerWidth > 500) searchExpanded.value = false
@@ -190,9 +216,13 @@ function closeSearch() { searchOpen.value = false }
 // 下拉选项格式化
 function formatOptPrice(v) {
     if (v == null) return '-'
+    v = Number(v)
     if (v >= 1e3) return '$' + (v / 1e3).toFixed(2) + 'K'
     if (v >= 1) return '$' + v.toFixed(2)
-    return '$' + v.toFixed(4)
+    if (v === 0) return '$0.00'
+    // 0 < v < 1：按数量级动态展开小数（不使用科学计数法，避免被舍成 0）
+    const decimals = Math.min(20, Math.max(2, Math.ceil(-Math.log10(v)) + 2))
+    return '$' + v.toFixed(decimals)
 }
 function formatOptChange(v) {
     if (v == null) return '-'
@@ -223,7 +253,6 @@ function onDocSearchClick(e) {
     <div class="data-header">
         <div class="header-left">
             <span class="header-title">AI Trade</span>
-            <button class="nav-news-btn" @click="goNews">新闻</button>
         </div>
 
         <div class="header-center">
@@ -323,6 +352,30 @@ function onDocSearchClick(e) {
                     <div class="ns-empty">无匹配结果</div>
                 </div>
             </div>
+
+            <!-- 控制面板（设置 / 过滤 / 功能） -->
+            <div class="ctrl-area">
+                <button class="ctrl-btn" type="button" @click.stop="toggleCtrl" :class="{ active: ctrlOpen }">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="3"/>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                    </svg>
+                </button>
+                <ControlPanel
+                    v-if="ctrlOpen"
+                    :active-time-frame="props.activeTimeFrame"
+                    :model-value="filterState"
+                    :theme="theme"
+                    :data-type="props.dataType"
+                    @update:active-time-frame="emit('update:activeTimeFrame', $event)"
+                    @update:model-value="Object.assign(filterState, $event)"
+                    @update:theme="onThemeChange"
+                    @update:data-type="onDataTypeChange"
+                    @navigate="onNavigate"
+                    @close="closeCtrl"
+                />
+            </div>
         </div>
 
         <!-- 底部全宽进度条 -->
@@ -366,27 +419,6 @@ function onDocSearchClick(e) {
     white-space: nowrap;
 }
 
-/* 新闻导航按钮 */
-.nav-news-btn {
-    margin-left: 14px;
-    height: 30px;
-    padding: 0 14px;
-    border: 1px solid #1e3a5f;
-    border-radius: 6px;
-    background: rgba(15, 25, 35, 0.6);
-    color: #8ba4be;
-    font-size: 13px;
-    font-family: inherit;
-    cursor: pointer;
-    transition: all 0.15s;
-    white-space: nowrap;
-}
-.nav-news-btn:hover {
-    border-color: #3b82c4;
-    color: #c8d8e8;
-    background: rgba(30, 58, 95, 0.3);
-}
-
 /* ---- 中：筛选按钮 + 面板锚点 ---- */
 .header-center {
     flex: 1;
@@ -428,6 +460,35 @@ function onDocSearchClick(e) {
 .tf-btn.active {
     background: #1e3a5f;
     color: #ffffff;
+}
+
+/* 控制面板入口（齿轮 icon） */
+.ctrl-area {
+    position: relative;
+    flex-shrink: 0;
+}
+.ctrl-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: 1px solid #1e3a5f;
+    border-radius: 6px;
+    background: rgba(15, 25, 35, 0.6);
+    color: #8ba4be;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.ctrl-btn:hover {
+    border-color: #3b82c4;
+    color: #c8d8e8;
+    background: rgba(30, 58, 95, 0.3);
+}
+.ctrl-btn.active {
+    border-color: #3b82c4;
+    color: #ffffff;
+    background: rgba(30, 58, 95, 0.5);
 }
 
 /* 窄屏下拉框 — 默认隐藏 */
@@ -682,6 +743,10 @@ function onDocSearchClick(e) {
     .name-search-wrapper {
         flex: initial;
     }
+    /* 小屏下取消独立的筛选 按钮（相关功能已在控制面板内） */
+    .filter-area {
+        display: none;
+    }
     .ns-mobile-btn {
         display: inline-flex;
         align-items: center;
@@ -710,7 +775,8 @@ function onDocSearchClick(e) {
     /* ===== 展开后：覆盖整个 header-center ===== */
     .header-center:has(.name-search-wrapper.ns-expanded) .timeframe-bar,
     .header-center:has(.name-search-wrapper.ns-expanded) .timeframe-select,
-    .header-center:has(.name-search-wrapper.ns-expanded) .filter-area {
+    .header-center:has(.name-search-wrapper.ns-expanded) .filter-area,
+    .header-center:has(.name-search-wrapper.ns-expanded) .ctrl-area {
         display: none;
     }
     .name-search-wrapper.ns-expanded {
@@ -770,8 +836,11 @@ function onDocSearchClick(e) {
 .panel-instance {
     position: fixed;  /* 相对于浏览器窗口 */
     top: 50px;
-    left: 20px;
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
     width: 85vw;
+    max-width: 700px;
     height: 500px;
 }
 

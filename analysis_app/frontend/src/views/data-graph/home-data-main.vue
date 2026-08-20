@@ -28,6 +28,9 @@ function onViewDetail(item) {
 // 时间维度（由 DataHeader 中的按钮控制）
 const activeTimeFrame = ref('day')
 
+// 数据源类型（货币=gate / 股票=stock），由控制面板设置栏切换
+const dataType = ref('gate')
+
 // 滚动节段切换：气泡图 ↔ 表格
 const showTable = ref(false)
 const chartSectionRef = ref(null)
@@ -146,8 +149,10 @@ function onPointerUp() {
     <div class="page-root">
         <DataHeader
             :active-time-frame="activeTimeFrame"
+            :data-type="dataType"
             :hidden="showTable"
             @update:active-time-frame="activeTimeFrame = $event"
+            @update:data-type="dataType = $event"
             @update:rank-min="rankMin = $event"
             @update:rank-max="rankMax = $event"
             @update:mc-min="mcMin = $event"

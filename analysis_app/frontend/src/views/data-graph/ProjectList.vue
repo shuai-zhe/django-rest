@@ -45,7 +45,12 @@ const timeColumns = [
 // 格式化为货币
 function formatPrice(v) {
     if (v == null) return '-'
-    return '$' + Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    v = Number(v)
+    if (v >= 1) return '$' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    if (v === 0) return '$0.00'
+    // 0 < v < 1：按数量级动态展开小数（不使用科学计数法，避免被舍成 0）
+    const decimals = Math.min(20, Math.max(2, Math.ceil(-Math.log10(v)) + 2))
+    return '$' + v.toFixed(decimals)
 }
 
 function formatMarketCap(v) {

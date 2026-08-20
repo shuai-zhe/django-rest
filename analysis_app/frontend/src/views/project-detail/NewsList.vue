@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, watch, onUnmounted } from 'vue'
+import { ref, computed, onMounted, watch, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { NewList } from "@/utils/apis/new"
 
@@ -19,6 +19,25 @@ const props = defineProps({
 })
 
 const router = useRouter()
+
+// 翻页后锚点回头部（.news-title）
+const titleRef = ref(null)
+function scrollToTop() {
+    // 等待 DOM 更新（列表刷新）后再滚动
+    nextTick(() => {
+        const titleEl = titleRef.value
+        if (!titleEl) return
+        // 1) 列表自身可滚动容器（非 compact 模式内部 overflow:auto）→ 回到第一条
+        const cardEl = titleEl.closest('.news-card')
+        const listEl = cardEl ? cardEl.querySelector('.news-list') : null
+        if (listEl && listEl.scrollHeight - listEl.clientHeight > 1) {
+            listEl.scrollTo({ top: 0, behavior: 'smooth' })
+        }
+        // 2) 整页滚动场景（compact 嵌入 / 整页滚动）→ 头部滚入视口，避开顶部 sticky 头部(56px)
+        const y = titleEl.getBoundingClientRect().top + window.scrollY - 56
+        window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' })
+    })
+}
 
 // 点击列表项 → 跳转新闻详情页
 function onItemClick(item) {
@@ -84,15 +103,15 @@ function onTypeChange() {
     fetchList()
 }
 function prevPage() {
-    if (page.value > 1) { page.value--; fetchList() }
+    if (page.value > 1) { page.value--; fetchList().then(scrollToTop) }
 }
 function nextPage() {
-    if (page.value < totalPages.value) { page.value++; fetchList() }
+    if (page.value < totalPages.value) { page.value++; fetchList().then(scrollToTop) }
 }
 function goPage(p) {
     if (p < 1 || p > totalPages.value || p === page.value) return
     page.value = p
-    fetchList()
+    fetchList().then(scrollToTop)
 }
 
 // ==================== 格式化 ====================
@@ -141,7 +160,7 @@ onUnmounted(() => { /* 无定时器 */ })
     <div class="news-card" :class="{ compact }">
         <!-- 头部 -->
         <div class="news-head">
-            <span class="news-title">{{ title }}</span>
+            <span ref="titleRef" class="news-title">{{ title }}</span>
             <span v-if="!compact" class="news-count">共 {{ total }} 条</span>
         </div>
 
