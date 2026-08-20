@@ -54,12 +54,14 @@ class StockProjectStatus(ChoiceMixin):
 class StockType(ChoiceMixin):
     SH = "sh"
     SZ = "sz"
+    BJ = "bj"
 
     @property
     def translate(self):
         map_ = {
             StockType.SH: "上交所",
             StockType.SZ: "深交所",
+            StockType.BJ: "北交所",
         }
         return map_[self]
 

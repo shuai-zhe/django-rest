@@ -2,6 +2,7 @@ import abc
 import datetime
 import re
 import time
+from typing import Any
 
 import akshare as ak
 import baostock as bs
@@ -22,9 +23,17 @@ DEFAULT_DIFF_INTERVAL = {
 
 class StockResource(abc.ABC):
     def extra_info(self, data, **kwargs) -> dict:
+        symbols = {}
+        code_type = data.get("code_type")
+        if code_type:
+            code_type = getattr(StockType, str(code_type).upper(), None)
+
+            if code_type:
+                symbols[code_type.value] = code_type.translate
+
         return {
             "rank": "-",
-            "symbols": {kwargs.get("code_type", kwargs.get("code_type", StockType))},
+            "symbols": symbols,
             "performance": {
                 KlineInterval.D1.value: data.get("涨跌幅", 0),
                 KlineInterval.D1.value.upper(): data.get("振幅", 0),
@@ -56,8 +65,8 @@ class StockResource(abc.ABC):
             "market_cap_dict": {
                 StockProjectStatus.SPOT.name: data.get("成交额"),
             },
-            "extra_info": self.extra_info(data, format_data=self.extra_info(data)),
         }
+        format_data["extra_info"] = self.extra_info(format_data)
         return format_data
 
     def stock_kline_format(self, data: list | dict | DataFrame, *args, **kwargs):
@@ -66,23 +75,29 @@ class StockResource(abc.ABC):
         :param data:原始数据
         :return:
         """
-        if not data:
-            return []
+        have_columns = {
+            "date": "t",
+            "open": "o",
+            "high": "h",
+            "low": "l",
+            "close": "c",
+            "volume": "v",
+        }
+        extra_columns = {
+            "amount": "amount",
+            "pctChg": "pctChg",
+        }
+        if kwargs.get("applay_extra_columns"):
+            have_columns.update(extra_columns)
+
+        if isinstance(data, list) or isinstance(data, dict):
+            if not data:
+                return []
+
         if isinstance(data, DataFrame):
-            return data.rename(
-                columns={
-                    "date": "t",
-                    "time": "time",
-                    "code": "code",
-                    "open": "open",
-                    "high": "high",
-                    "low": "low",
-                    "close": "close",
-                    "volume": "volume",
-                    "amount": "amount",
-                    "pctChg": "pctChg",
-                }
-            ).to_dict(orient="records")
+            return data.rename(columns=have_columns)[
+                list(have_columns.values())
+            ].to_dict(orient="records")
 
     @abc.abstractmethod
     def stock_list(self) -> list:
@@ -126,7 +141,7 @@ class BaoStockResource(StockResource):
 
     def stock_kline(
         self, code, frequency, start_date, end_date, adjustflag: str = "3"
-    ) -> list:
+    ) -> list[Any] | None | Any:
         """
         code：股票代码，sh或sz.+6位数字代码，或者指数代码，如：sh.601398。sh：上海；sz：深圳。此参数不可为空；
         fields：指示简称，支持多指标输入，以半角逗号分隔，填写内容作为返回类型的列。详细指标列表见历史行情指标参数章节，日线与分钟线参数不同。此参数不可为空；
@@ -147,7 +162,7 @@ class BaoStockResource(StockResource):
         bs.login()
         rs = bs.query_history_k_data_plus(
             code=code,
-            fields="date,time,code,open,high,low,close,volume,amount,pctChg",
+            fields="date,code,open,high,low,close,preclose,volume,amount,adjustflag,turn,tradestatus,pctChg,isST",
             start_date=start_date,
             end_date=end_date,
             frequency=frequency,
@@ -158,21 +173,17 @@ class BaoStockResource(StockResource):
             # 获取一条记录，将记录合并在一起
             data_list.append(rs.get_row_data())
         result = pd.DataFrame(data_list, columns=rs.fields)
+        result["date"] = result["date"].map(
+            lambda x: int(time.mktime(time.strptime(x, "%Y-%m-%d")))
+        )
         bs.logout()
 
         if result.empty:
             return []
-        return result.rename(
-            columns={
-                "date": "date",
-                "time": "time",
-                "code": "code",
-                "open": "open",
-                "high": "high",
-                "low": "low",
-                "close": "close",
-                "volume": "volume",
-                "amount": "amount",
-                "pctChg": "pctChg",
-            }
-        ).to_dict(orient="records")
+        return self.stock_kline_format(result)
+
+
+if __name__ == "__main__":
+    # data = BaoStockResource().stock_kline("sh.600000", "d", "2026-01-01", "2026-05-01")
+    # df = pd.DataFrame(AkShareStockResource().stock_list())#.to_csv("./tests.csv")
+    print(AkShareStockResource().stock_list())

@@ -1,4 +1,5 @@
 import datetime
+import re
 import time
 
 from rest_framework.serializers import Serializer
@@ -76,3 +77,32 @@ def to_datetime(v):
         except ValueError:
             return None
     return None
+
+
+def to_strftime(v, is_hms=False):
+    """统一把 datetime 转成 strftime"""
+    if is_hms:
+        # 如果只是时分秒部分;自动填补当前日期；考虑如果数据发生延迟可能导致在0点左右的事项，如果补充的时间大于当前时间那么应该时间-1
+        t = time.strftime(f"%Y-%m-%d {v}")
+        now_time = time.strftime("%Y-%m-%d %H:%M:%S")
+        if t > now_time:
+            t = datetime.datetime.strptime(t, "%Y-%m-%d %H:%M:%S") - datetime.timedelta(
+                days=1
+            )
+        return t.strftime("%Y-%m-%d %H:%M:%S")
+    if v is None:
+        return None
+    if isinstance(v, datetime.datetime):
+        return v.strftime("%Y-%m-%d %H:%M:%S")
+    if isinstance(v, (int, float)):
+        return datetime.datetime.fromtimestamp(v).strftime("%Y-%m-%d %H:%M:%S")
+    if isinstance(v, str):
+        if v.isdigit() or re.findall(r"\d+\.\d+", v):
+            return to_strftime(float(v))
+        # 检查是否日期格式
+        vs = re.findall(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}", v)
+        if vs:
+            return vs[0]
+        raise ValueError("无法解析时间格式")
+
+    return v
