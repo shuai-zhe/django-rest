@@ -9,11 +9,23 @@ import { ProjectList } from "@/utils/apis/project"
  */
 const stores = {}
 
+// ==================== 全局数据源类型（跨作用域共享） ====================
+// 持久化到 localStorage，刷新页面后仍记住上次选择（仅 'gate' / 'stock' 合法）
+const STORAGE_KEY = 'global_data_type'
+const _savedType = (() => {
+    try {
+        const v = localStorage.getItem(STORAGE_KEY)
+        return v === 'gate' || v === 'stock' ? v : 'gate'
+    } catch {
+        return 'gate'
+    }
+})()
+const globalDataType = ref(_savedType)   // 'gate'=货币, 'stock'=股票
+
 function createStore() {
     const projectListData = ref([])
     const loading = ref(false)
     const progress = ref(0)     // 0‑1, 平滑更新供进度条使用
-    const dataType = ref('gate')   // 'gate'=货币, 'stock'=股票
 
     // 以下状态均按 scope 独立，互不干扰
     let fetchPromise = null
@@ -31,7 +43,7 @@ function createStore() {
         if (fetchPromise && !force) return fetchPromise
 
         loading.value = true
-        fetchPromise = ProjectList(params, dataType.value)
+        fetchPromise = ProjectList(params, globalDataType.value)
             .then(res => {
                 // 无论带参与否，都整体替换本作用域的数据（各作用域独立，无需 upsert）
                 projectListData.value = res.data || []
@@ -97,27 +109,35 @@ function createStore() {
         refreshParams = {}
     }
 
-    // ==================== 数据源切换（股票 / 货币） ====================
-    /**
-     * 切换数据源类型（'gate'=货币, 'stock'=股票），并强制重新拉取。
-     * 单例共享，所有依赖 projectListData 的组件自动响应式更新。
-     */
-    const setDataType = (type) => {
-        if (type === dataType.value) return Promise.resolve(projectListData.value)
-        dataType.value = type
-        return fetchData(true)
-    }
-
     return {
         projectListData,
         loading,
         progress,
-        dataType,
-        setDataType,
         fetchData,
         startAutoRefresh,
         stopAutoRefresh,
     }
+}
+
+/**
+ * 切换数据源类型（'gate'=货币, 'stock'=股票），全局生效。
+ * 更新全局 dataType 后，强制重新拉取【所有已激活作用域】的数据，
+ * 首页与详情页（列表 + 自动刷新）都会跟随切换。
+ */
+function setDataType(type) {
+    if (type === globalDataType.value) return Promise.resolve()
+    globalDataType.value = type
+    // 持久化到 localStorage，刷新后保持上次选择
+    try {
+        localStorage.setItem(STORAGE_KEY, type)
+    } catch {
+        // 忽略隐私模式等写入失败，不影响内存态
+    }
+    const tasks = []
+    for (const key of Object.keys(stores)) {
+        tasks.push(stores[key].fetchData(true))
+    }
+    return Promise.all(tasks)
 }
 
 /**
@@ -126,13 +146,20 @@ function createStore() {
  */
 export function useProjectData(scope = 'home') {
     if (!stores[scope]) stores[scope] = createStore()
-    // HMR / 版本兼容：若已缓存的旧实例缺少最新暴露的方法（如 setDataType），
+    // HMR / 版本兼容：若已缓存的旧实例缺少 fetchData 等核心方法，
     // 丢弃旧实例重建，避免调用时报 "xxx is not a function"
-    if (typeof stores[scope].setDataType !== 'function') {
+    if (typeof stores[scope].fetchData !== 'function') {
         stores[scope] = createStore()
     }
     return stores[scope]
 }
+
+/** 全局数据源类型（响应式 ref，所有组件共享只读引用） */
+export function useGlobalDataType() {
+    return globalDataType
+}
+
+export { setDataType }
 
 // Vite HMR：热更新时清空单例池，确保下次调用重建为最新版本
 if (import.meta.hot) {

@@ -1,21 +1,22 @@
 import request from "../request"
 
-// 数据源类型 → 后端接口前缀（gate=货币，stock=股票，两者结构对齐）
-const PROJECT_ENDPOINT = {
-    gate:  "/gate/project",
-    stock: "/stock/project",
-}
-const KLINE_ENDPOINT = {
-    gate:  "/gate/project/kline",
-    stock: "/stock/project/kline",
+// 合法数据源白名单（与后端模块前缀对齐），用于校验，避免脏值打到不存在的路由
+const VALID_DATA_TYPES = ['gate', 'stock']
+// 默认前缀：未存储 / 非法时回退到 gate（货币）
+const DEFAULT_DATA_TYPE = 'gate'
+
+// 实时计算接口前缀：gate -> /gate，stock -> /stock
+function resolvePrefix(dataType) {
+    const type = VALID_DATA_TYPES.includes(dataType) ? dataType : DEFAULT_DATA_TYPE
+    return `/${type}`
 }
 
-export const ProjectList=(params = {}, dataType = 'gate')=>{
-    const ep = PROJECT_ENDPOINT[dataType] || PROJECT_ENDPOINT.gate
-    return request.get(ep, { params })
+export const ProjectList=(params = {}, dataType = DEFAULT_DATA_TYPE)=>{
+    // 列表接口：<prefix>/project
+    return request.get(`${resolvePrefix(dataType)}/project`, { params })
 }
 
-export const ProjectKline=(params, dataType = 'gate')=>{
-    const ep = KLINE_ENDPOINT[dataType] || KLINE_ENDPOINT.gate
-    return request.get(ep, { params })
+export const ProjectKline=(params, dataType = DEFAULT_DATA_TYPE)=>{
+    // K线接口：<prefix>/project/kline
+    return request.get(`${resolvePrefix(dataType)}/project/kline`, { params })
 }

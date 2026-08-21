@@ -1,7 +1,7 @@
 <script setup>
 import { ref, reactive, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { useProjectData } from "@/composables/useProjectData"
+import { useProjectData, useGlobalDataType, setDataType } from "@/composables/useProjectData"
 import FilterPanel from "./FilterPanel.vue"
 import ControlPanel from "./ControlPanel.vue"
 
@@ -21,7 +21,8 @@ const emit = defineEmits([
     'viewDetail',
 ])
 
-const { projectListData, progress, dataType, setDataType } = useProjectData()
+const { projectListData, progress } = useProjectData()
+const dataType = useGlobalDataType()
 const router = useRouter()
 const remaining = computed(() => Math.ceil((1 - progress.value) * 60))
 

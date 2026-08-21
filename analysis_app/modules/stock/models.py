@@ -1,5 +1,7 @@
 from django.db import models
 
+from core.constants import StockTrade
+
 # Create your models here.
 
 
@@ -22,3 +24,17 @@ class StockProject(models.Model):
     )
     create_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
     update_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
+
+    def get_stock_id(self, dtype):
+        """
+        获取对应交易所需要的股票ID
+        :param dtype: 数据类型
+        :return: 股票ID
+        """
+        if dtype not in StockTrade.values():
+            raise ValueError(f"Invalid dtype: {dtype}")
+        if dtype == StockTrade.AKSHARE.value:
+            return self.code_type + self.code_id
+        elif dtype == StockTrade.BAOSTOCK.value:
+            return self.code_type + "." + self.code_id
+        return self.name

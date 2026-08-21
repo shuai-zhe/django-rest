@@ -29,5 +29,9 @@ class StockMerge(ProjectMerge):
             "name": project["name"],
             "display_name": project["display_name"],
             "code_id": project["code_id"],
+            "code_type": project["code_type"],
         }
         return model_data
+
+
+StockMerge("spot").save()

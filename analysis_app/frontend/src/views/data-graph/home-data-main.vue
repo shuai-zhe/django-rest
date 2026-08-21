@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import DataHeader from "./DataHeader.vue"
 import ProjectList from "./ProjectList.vue"
 import AnalysisScatterGraph from "./AnalysisScatterGraph.vue"
+import { useGlobalDataType } from "@/composables/useProjectData"
 
 const router = useRouter()
 
@@ -28,8 +29,8 @@ function onViewDetail(item) {
 // 时间维度（由 DataHeader 中的按钮控制）
 const activeTimeFrame = ref('day')
 
-// 数据源类型（货币=gate / 股票=stock），由控制面板设置栏切换
-const dataType = ref('gate')
+// 数据源类型（货币=gate / 股票=stock）：全局状态，工具栏切换后全站生效
+const dataType = useGlobalDataType()
 
 // 滚动节段切换：气泡图 ↔ 表格
 const showTable = ref(false)
@@ -152,7 +153,6 @@ function onPointerUp() {
             :data-type="dataType"
             :hidden="showTable"
             @update:active-time-frame="activeTimeFrame = $event"
-            @update:data-type="dataType = $event"
             @update:rank-min="rankMin = $event"
             @update:rank-max="rankMax = $event"
             @update:mc-min="mcMin = $event"

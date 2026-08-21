@@ -48,10 +48,10 @@ class StockResource(abc.ABC):
         :return:
         """
         code = data.get("代码", "")
-        code = re.findall("[a-z]{2}\\d+", code)
-        if len(code) != 1:
+        code_split = re.findall("[a-z]{2}\\d+", code)
+        if len(code_split) != 1:
             raise ValueError("代码格式错误")
-        code_type, code_value = code[0][:2], code[0][2:]
+        code_type, code_value = code[:2], code[2:]
         format_data = {
             "name": data.get("代码"),
             "display_name": data.get("名称"),
@@ -163,7 +163,7 @@ class BaoStockResource(StockResource):
         bs.login()
         rs = bs.query_history_k_data_plus(
             code=code,
-            fields="date,code,open,high,low,close,preclose,volume,amount,adjustflag,turn,tradestatus,pctChg,isST",
+            fields="date,code,open,high,low,close,volume,amount,adjustflag",
             start_date=start_date,
             end_date=end_date,
             frequency=frequency,
@@ -173,7 +173,13 @@ class BaoStockResource(StockResource):
         while (rs.error_code == "0") & rs.next():
             # 获取一条记录，将记录合并在一起
             data_list.append(rs.get_row_data())
-        result = pd.DataFrame(data_list, columns=rs.fields)
+
+        if not data_list:
+            return []
+
+        result = pd.DataFrame(data_list, columns=rs.fields).sort_values(
+            "date", ascending=False
+        )
         result["date"] = result["date"].map(
             lambda x: int(time.mktime(time.strptime(x, "%Y-%m-%d")))
         )
@@ -185,8 +191,11 @@ class BaoStockResource(StockResource):
 
 
 if __name__ == "__main__":
-    # data = BaoStockResource().stock_kline("sh.600000", "d", "2026-01-01", "2026-05-01")
+    data = BaoStockResource().stock_kline(
+        "sh.600000", "15", start_date="2024-07-01", end_date="2024-12-31"
+    )
+    print(data)
     # df = pd.DataFrame(AkShareStockResource().stock_list())#.to_csv("./tests.csv")
     # print(AkShareStockResource().stock_list())
 
-    print(ak.stock_zh_a_spot())
+    # print(ak.stock_zh_a_spot())

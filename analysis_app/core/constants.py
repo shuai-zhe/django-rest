@@ -97,3 +97,28 @@ class KlineInterval(ChoiceMixin):
         }
 
         return map_[self]
+
+
+class StockTrade(ChoiceMixin):
+    BAOSTOCK = "baostock"
+    AKSHARE = "akshare"
+
+    @property
+    def translate(self):
+        map_ = {
+            StockTrade.BAOSTOCK: "baostock",
+            StockTrade.AKSHARE: "akshare",
+        }
+        return map_[self]
+
+
+def time_interval_limit_builder(code):
+    return {
+        KlineInterval.M5.value: 6,
+        KlineInterval.M15.value: 10 * 2,
+        KlineInterval.M30.value: 33,
+        KlineInterval.H1.value: 40 * 2,
+        KlineInterval.D1.value: 200,
+        KlineInterval.D7.value: 200,
+        KlineInterval.D30.value: 400,
+    }.get(code, 10)

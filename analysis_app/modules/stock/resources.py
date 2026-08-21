@@ -17,4 +17,5 @@ class StockKlineResource(Resource):
     RequestSerializer = StockKlineSerializer
 
     def perform_request(self, validated_data, **kwargs):
+        print(validated_data)
         return StockService().get_kline_all(validated_data)
