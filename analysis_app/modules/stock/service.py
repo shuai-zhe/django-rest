@@ -1,3 +1,5 @@
+from django.db.models import F, Func, Value
+
 from core.constants import StockTrade
 from modules.stock.models import StockProject
 
@@ -14,7 +16,16 @@ class StockService:
         if filter_format:
             _ = _.filter(**filter_format)
         # 股票类型在后台限制最多展示 500 条数据
-        _ = _.order_by("-extra_info__performance__day")[:500]
+        # 按 extra_info.performance.day 的绝对值降序（正负一视同仁）
+        day_abs = Func(
+            Func(
+                F("extra_info"),
+                Value("$.performance.day"),
+                function="JSON_EXTRACT",
+            ),
+            function="ABS",
+        )
+        _ = _.order_by(day_abs.desc())[:500]
         return self.formatter(_)
 
     def get_kline_all(self, validated_data, **kwargs):

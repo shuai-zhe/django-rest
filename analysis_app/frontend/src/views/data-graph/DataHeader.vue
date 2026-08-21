@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { useProjectData, useGlobalDataType, setDataType } from "@/composables/useProjectData"
 import FilterPanel from "./FilterPanel.vue"
 import ControlPanel from "./ControlPanel.vue"
+import FunctionPanel from "./FunctionPanel.vue"
 
 const props = defineProps({
     activeTimeFrame: { type: String, default: 'day' },
@@ -51,10 +52,15 @@ const panelOpen = ref(false)
 function togglePanel() { panelOpen.value = !panelOpen.value }
 function closePanel()  { panelOpen.value = false }
 
-// ==================== 控制面板（设置 / 过滤 / 功能） ====================
+// ==================== 控制面板（设置 / 过滤） ====================
 const ctrlOpen = ref(false)
 function toggleCtrl() { ctrlOpen.value = !ctrlOpen.value }
 function closeCtrl()  { ctrlOpen.value = false }
+
+// ==================== 功能面板（新闻 / 行情首页 等导航） ====================
+const funcOpen = ref(false)
+function toggleFunc() { funcOpen.value = !funcOpen.value }
+function closeFunc()  { funcOpen.value = false }
 
 // 主题（示例：可后续扩展为真实换肤）
 const theme = ref('dark')
@@ -66,9 +72,9 @@ function onDataTypeChange(t) {
     emit('update:dataType', t)
 }
 
-// 控制面板内导航
+// 功能面板内导航
 function onNavigate(name) {
-    closeCtrl()
+    closeFunc()
     if (name === 'news') goNews()
     else if (name === 'home') router.push('/')
 }
@@ -77,6 +83,7 @@ function onNavigate(name) {
 function onDocClick(e) {
     if (panelOpen.value) closePanel()
     if (ctrlOpen.value) closeCtrl()
+    if (funcOpen.value) closeFunc()
 }
 function onResize() {
     if (window.innerWidth > 500) searchExpanded.value = false
@@ -354,27 +361,48 @@ function onDocSearchClick(e) {
                 </div>
             </div>
 
-            <!-- 控制面板（设置 / 过滤 / 功能） -->
+            <!-- 控制面板（主题 / 数据源 / 导航）+ 功能面板（默认时间维度 / 过滤） -->
             <div class="ctrl-area">
+                <!-- 功能按钮：点击弹出独立的「功能」面板 -->
+                <button class="ctrl-btn ctrl-func-btn" type="button" @click.stop="toggleFunc" :class="{ active: funcOpen }">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="3" width="7" height="7" rx="1"/>
+                        <rect x="14" y="3" width="7" height="7" rx="1"/>
+                        <rect x="3" y="14" width="7" height="7" rx="1"/>
+                        <rect x="14" y="14" width="7" height="7" rx="1"/>
+                    </svg>
+                    <span class="ctrl-func-text"></span>
+                </button>
+
+                <!-- 总控面板按钮 -->
                 <button class="ctrl-btn" type="button" @click.stop="toggleCtrl" :class="{ active: ctrlOpen }">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                         stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
                         <circle cx="12" cy="12" r="3"/>
-                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0-.33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
                     </svg>
                 </button>
+
+                <!-- 总控面板（主题 / 数据源 / 导航） -->
                 <ControlPanel
                     v-if="ctrlOpen"
-                    :active-time-frame="props.activeTimeFrame"
-                    :model-value="filterState"
                     :theme="theme"
                     :data-type="props.dataType"
-                    @update:active-time-frame="emit('update:activeTimeFrame', $event)"
-                    @update:model-value="Object.assign(filterState, $event)"
                     @update:theme="onThemeChange"
                     @update:data-type="onDataTypeChange"
                     @navigate="onNavigate"
                     @close="closeCtrl"
+                />
+
+                <!-- 功能面板（默认时间维度 / 过滤），复用 control-panel 样式 -->
+                <FunctionPanel
+                    v-if="funcOpen"
+                    :active-time-frame="props.activeTimeFrame"
+                    :model-value="filterState"
+                    @update:active-time-frame="emit('update:activeTimeFrame', $event)"
+                    @update:model-value="Object.assign(filterState, $event)"
+                    @close="closeFunc"
                 />
             </div>
         </div>
@@ -463,10 +491,13 @@ function onDocSearchClick(e) {
     color: #ffffff;
 }
 
-/* 控制面板入口（齿轮 icon） */
+/* 控制面板入口（功能按钮 + 齿轮 icon 平行排列） */
 .ctrl-area {
     position: relative;
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
 }
 .ctrl-btn {
     display: flex;
@@ -490,6 +521,18 @@ function onDocSearchClick(e) {
     border-color: #3b82c4;
     color: #ffffff;
     background: rgba(30, 58, 95, 0.5);
+}
+
+/* [功能] 按钮：带文字，宽度自适应 */
+.ctrl-func-btn {
+    width: auto;
+    padding: 0 10px;
+    gap: 5px;
+}
+.ctrl-func-text {
+    font-size: 13px;
+    font-family: inherit;
+    letter-spacing: 1px;
 }
 
 /* 窄屏下拉框 — 默认隐藏 */
@@ -732,10 +775,10 @@ function onDocSearchClick(e) {
     font-size: 12px;
 }
 
-/* ========== 响应式：窄屏隐藏按钮组，显示下拉框 ========== */
+/* ========== 响应式：窄屏隐藏按钮组与下拉框（时间维度入口移至功能面板） ========== */
 @media (max-width: 900px) {
     .timeframe-bar { display: none; }
-    .timeframe-select { display: inline-block; }
+    .timeframe-select { display: none; }
 }
 
 /* ========== 超窄屏：搜索按钮 / 展开覆盖 ========== */

@@ -189,7 +189,7 @@ defineExpose({ activeTags, handleReset })
         <!-- 顶部标题栏 + 关闭 -->
         <div class="panel-header">
             <span class="panel-title">筛选条件</span>
-            <button class="panel-close" @click="$emit('close')">✕</button>
+<!--            <button class="panel-close" @click="$emit('close')">✕</button>-->
         </div>
 
         <!-- 三列 -->

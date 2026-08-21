@@ -1,50 +1,31 @@
 <script setup>
 /**
  * ControlPanel — 首页总控面板（独立组件）
- * 三大分类：
- *   设置  —— 默认时间维度、主题（深色/浅色，示例）
- *   过滤  —— 直接内嵌现有 FilterPanel（复用筛选逻辑）
- *   功能  —— 新闻 / 行情首页 等导航入口
+ * 分类：
+ *   主题  —— 深色 / 浅色
+ *   数据源 —— 股票 / 货币
+ *   导航  —— 新闻 / 行情首页（点击触发 navigate）
+ *
+ * 注：「默认时间维度 / 过滤」已拆分到独立的 FunctionPanel 组件（点击顶栏 [功能] 按钮触发），
+ *     二者复用同一套 .control-panel / .cp-* 样式（全局，见本文件 <style>）。
  *
  * props:
- *   activeTimeFrame 当前时间维度 key
- *   modelValue      筛选状态对象（v-model，透传给 FilterPanel）
  *   theme           主题 'dark' | 'light'
  *   dataType        数据源类型 'gate'(货币) | 'stock'(股票)
  * emits:
- *   update:activeTimeFrame / update:modelValue / update:theme / update:dataType / navigate(name) / close
+ *   update:theme / update:dataType / navigate(name) / close
  */
-import FilterPanel from "./FilterPanel.vue"
-
 const props = defineProps({
-    activeTimeFrame: { type: String, default: 'day' },
-    modelValue:      { type: Object, default: () => ({}) },
-    theme:           { type: String, default: 'dark' },
-    dataType:        { type: String, default: 'gate' },
+    theme:    { type: String, default: 'dark' },
+    dataType: { type: String, default: 'gate' },
 })
 
 const emit = defineEmits([
-    'update:activeTimeFrame',
-    'update:modelValue',
     'update:theme',
     'update:dataType',
     'navigate',
     'close',
 ])
-
-// 时间维度选项（与 DataHeader 保持一致）
-const timeFrameOptions = [
-    { key: 'min1',   label: '1分钟' },
-    { key: 'min5',   label: '5分钟' },
-    { key: 'min15',  label: '15分钟' },
-    { key: 'hour',   label: '1小时' },
-    { key: 'hour4',  label: '4小时' },
-    { key: 'day',    label: '日' },
-    { key: 'week',   label: '周' },
-    { key: 'month',  label: '月' },
-    { key: 'month3', label: '3月' },
-    { key: 'year',   label: '年' },
-]
 </script>
 
 <template>
@@ -55,7 +36,7 @@ const timeFrameOptions = [
         </div>
 
         <div class="cp-body">
-            <!-- ===== 设置 ===== -->
+            <!-- ===== 主题 ===== -->
             <section class="cp-section">
                 <h4 class="cp-section-title">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -63,24 +44,10 @@ const timeFrameOptions = [
                         <circle cx="12" cy="12" r="3"/>
                         <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
                     </svg>
-                    设置
+                    主题
                 </h4>
-
                 <div class="cp-field">
-                    <span class="cp-label">默认时间维度</span>
-                    <div class="cp-tf-group">
-                        <button
-                            v-for="opt in timeFrameOptions"
-                            :key="opt.key"
-                            type="button"
-                            :class="['cp-tf-btn', { active: props.activeTimeFrame === opt.key }]"
-                            @click="emit('update:activeTimeFrame', opt.key)"
-                        >{{ opt.label }}</button>
-                    </div>
-                </div>
-
-                <div class="cp-field">
-                    <span class="cp-label">主题</span>
+                    <span class="cp-label">外观</span>
                     <div class="cp-theme-switch">
                         <button
                             type="button"
@@ -94,9 +61,21 @@ const timeFrameOptions = [
                         >浅色</button>
                     </div>
                 </div>
+            </section>
 
+            <!-- ===== 数据源 ===== -->
+            <section class="cp-section">
+                <h4 class="cp-section-title">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <ellipse cx="12" cy="5" rx="9" ry="3"/>
+                        <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+                        <path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/>
+                    </svg>
+                    数据源
+                </h4>
                 <div class="cp-field">
-                    <span class="cp-label">数据源</span>
+                    <span class="cp-label">类型</span>
                     <div class="cp-theme-switch">
                         <button
                             type="button"
@@ -112,23 +91,7 @@ const timeFrameOptions = [
                 </div>
             </section>
 
-            <!-- ===== 过滤 ===== -->
-            <section class="cp-section">
-                <h4 class="cp-section-title">
-                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor"
-                        stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M2 4h12M4 8h8M6 12h4"/>
-                    </svg>
-                    过滤
-                </h4>
-                <!-- 内嵌现有筛选面板（普通卡片形式，非浮层） -->
-                <FilterPanel
-                    :model-value="props.modelValue"
-                    @update:model-value="emit('update:modelValue', $event)"
-                />
-            </section>
-
-            <!-- ===== 功能 ===== -->
+            <!-- ===== 导航 ===== -->
             <section class="cp-section">
                 <h4 class="cp-section-title">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -138,7 +101,7 @@ const timeFrameOptions = [
                         <rect x="3" y="14" width="7" height="7" rx="1"/>
                         <rect x="14" y="14" width="7" height="7" rx="1"/>
                     </svg>
-                    功能
+                    导航
                 </h4>
                 <div class="cp-nav-grid">
                     <button class="cp-nav-item" type="button" @click="emit('navigate', 'news')">
@@ -163,7 +126,8 @@ const timeFrameOptions = [
     </div>
 </template>
 
-<style scoped>
+<style>
+/* 全局通用控制面板样式：ControlPanel 与 FunctionPanel 共用 .control-panel / .cp-* 体系 */
 .control-panel {
     position: fixed;
     top: 72px;
@@ -195,13 +159,13 @@ const timeFrameOptions = [
     border-radius: 4px;
 }
 .control-panel::-webkit-scrollbar-thumb:hover { background: #2b5278; }
-.control-panel :deep(::-webkit-scrollbar) { width: 8px; height: 8px; }
-.control-panel :deep(::-webkit-scrollbar-track) { background: transparent; }
-.control-panel :deep(::-webkit-scrollbar-thumb) {
+.control-panel ::-webkit-scrollbar { width: 8px; height: 8px; }
+.control-panel ::-webkit-scrollbar-track { background: transparent; }
+.control-panel ::-webkit-scrollbar-thumb {
     background: #1e3a5f;
     border-radius: 4px;
 }
-.control-panel :deep(::-webkit-scrollbar-thumb:hover) { background: #2b5278; }
+.control-panel ::-webkit-scrollbar-thumb:hover { background: #2b5278; }
 
 .cp-header {
     display: flex;
@@ -330,14 +294,5 @@ const timeFrameOptions = [
     border-color: #3b82c4;
     background: rgba(30, 58, 95, 0.35);
     color: #fff;
-}
-
-/* 内嵌的 FilterPanel：去掉其外边距/标题冗余，作为卡片融入 */
-.control-panel :deep(.filter-panel) {
-    margin: 0;
-    border: 1px solid #1e3a5f;
-    border-radius: 8px;
-    background: rgba(15, 25, 35, 0.45);
-    box-shadow: none;
 }
 </style>

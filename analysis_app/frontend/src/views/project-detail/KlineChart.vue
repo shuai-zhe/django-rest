@@ -32,11 +32,10 @@ function intervalLabel(v) {
     return INTERVAL_LABELS[v] || v
 }
 
-// 常用级别快捷按钮（仅展示后端支持的那些）
-const QUICK_INTERVALS = ['1m', '15m', '1h', '4h', '1d']
-const quickIntervals = computed(() =>
-    QUICK_INTERVALS.filter(v => intervals.value.includes(v))
-)
+// 快捷级别：直接取后端返回的 interval 列表前 5 个展示，不再写死白名单。
+// 这样 stock 类型若无分钟级别时，会自动用列表前面存在的其它级别（如日/周/月）填补。
+const QUICK_LIMIT = 5
+const quickIntervals = computed(() => intervals.value.slice(0, QUICK_LIMIT))
 
 // 「更多」下拉：后端返回的全部级别
 const moreOptions = computed(() => intervals.value)

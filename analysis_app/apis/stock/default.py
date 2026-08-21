@@ -177,13 +177,56 @@ class BaoStockResource(StockResource):
         if not data_list:
             return []
 
-        result = pd.DataFrame(data_list, columns=rs.fields).sort_values(
-            "date", ascending=False
-        )
-        result["date"] = result["date"].map(
+        # BaoStock 返回的数据本身已是 日期升序，且同一天的多条 bar 在原始顺序中即
+        # 从早到晚排列，无需再做降序/升序反转。
+        result = pd.DataFrame(data_list, columns=rs.fields)
+
+        # BaoStock 无论何种周期，date 字段都只返回 年月日。需要按真实交易时段构造时间轴。
+        # A股交易时段：上午 09:30-11:30、下午 13:00-15:00（午休 11:30-13:00 不交易）。
+        # 日/周/月线每天仅一根，保留当天日期即可；分钟/小时线按真实开盘时间分段累加。
+        _freq_seconds = {
+            "5": 5 * 60,
+            "15": 15 * 60,
+            "30": 30 * 60,
+            "60": 60 * 60,
+            "d": 24 * 60 * 60,
+            "w": 7 * 24 * 60 * 60,
+            "m": 30 * 24 * 60 * 60,
+        }
+        _interval_sec = _freq_seconds.get(frequency, 24 * 60 * 60)
+
+        # 当天 00:00:00 的秒级时间戳（基准日）
+        result["_day_ts"] = result["date"].map(
             lambda x: int(time.mktime(time.strptime(x, "%Y-%m-%d")))
         )
-        bs.logout()
+
+        if frequency in ("5", "15", "30", "60"):
+            # 组内从 0 开始的顺序索引（升序，从早到晚）
+            result["_seq"] = result.groupby("date", sort=False).cumcount()
+            # 当天总 bar 数：前一半为上午（09:30 起），后一半为下午（13:00 起）
+            _day_count = result.groupby("date")["_seq"].transform("max") + 1
+            _am_count = _day_count // 2
+            _am_base = 9 * 3600 + 30 * 60  # 09:30:00 距午夜秒数
+            _pm_base = 13 * 3600  # 13:00:00 距午夜秒数
+            # 上午：从 09:30 起按 _seq 累加；下午：从 13:00 起按 (_seq-上午数) 累加
+            _offset = (
+                result["_seq"].where(
+                    result["_seq"] < _am_count,
+                    result["_seq"] - _am_count,
+                )
+                * _interval_sec
+                + _am_base
+            )
+            _offset = _offset.where(
+                result["_seq"] < _am_count, _offset + (_pm_base - _am_base)
+            )
+            result["date"] = result["_day_ts"] + _offset
+        else:
+            # 日/周/月线：当天日期，时分归零
+            result["date"] = result["_day_ts"]
+
+        result = result.drop(columns=["_day_ts", "_seq"], errors="ignore")
+        result.sort_values("date", inplace=True, ascending=True)
 
         if result.empty:
             return []
@@ -194,8 +237,3 @@ if __name__ == "__main__":
     data = BaoStockResource().stock_kline(
         "sh.600000", "15", start_date="2024-07-01", end_date="2024-12-31"
     )
-    print(data)
-    # df = pd.DataFrame(AkShareStockResource().stock_list())#.to_csv("./tests.csv")
-    # print(AkShareStockResource().stock_list())
-
-    # print(ak.stock_zh_a_spot())
