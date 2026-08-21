@@ -79,6 +79,27 @@ class ProjectMerge:
             "market_cap_dict": {self.status: resource["marketcap"]},
         }
 
+    def init_update_build(
+        self,
+        pm,
+        project,
+    ):
+        [
+            self.extra_info_update_json(
+                queryset=pm, filed=_, update_data=project.get(_)
+            )
+            for _ in self.extra_info_update_fileds
+        ]
+        [
+            self.status_dict_update(
+                queryset=pm,
+                filed=_[0],
+                status=self.status,
+                update_data=project.get(_[1]),
+            )
+            for _ in self.status_dict_update_fileds
+        ]
+
     def display_builder(self, project):
         # 构造不会变的数据列
         model_data = {
@@ -99,22 +120,8 @@ class ProjectMerge:
             if project["name"] in self.exist_project:
                 pm = self.model.objects.get(**model_data)
                 update_project_list.append(pm)
+                self.init_update_build(pm, project)
                 count_dict["update"] += 1
-                [
-                    self.extra_info_update_json(
-                        queryset=pm, filed=_, update_data=project.get(_)
-                    )
-                    for _ in self.extra_info_update_fileds
-                ]
-                [
-                    self.status_dict_update(
-                        queryset=pm,
-                        filed=_[0],
-                        status=self.status,
-                        update_data=project.get(_[1]),
-                    )
-                    for _ in self.status_dict_update_fileds
-                ]
             else:
                 _ = {**model_data, **self.init_builder(project)}
                 pm = self.model(**_)

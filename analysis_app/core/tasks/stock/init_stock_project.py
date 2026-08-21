@@ -22,7 +22,25 @@ class StockMerge(ProjectMerge):
 
     def init_builder(self, resource):
         fields = ["extra_info", "price_dict", "volume_dict", "market_cap_dict"]
-        return {filed: resource[filed] for filed in fields}
+        data = {filed: resource[filed] for filed in fields}
+        return data
+
+    def init_update_build(self, pm, project):
+        [
+            self.extra_info_update_json(
+                queryset=pm, filed=_, update_data=project.get("extra_info", {}).get(_)
+            )
+            for _ in self.extra_info_update_fileds
+        ]
+        [
+            self.status_dict_update(
+                queryset=pm,
+                filed=_[0],
+                status=self.status,
+                update_data=project.get(_[0], {}).get("spot"),
+            )
+            for _ in self.status_dict_update_fileds
+        ]
 
     def display_builder(self, project):
         model_data = {
@@ -32,6 +50,3 @@ class StockMerge(ProjectMerge):
             "code_type": project["code_type"],
         }
         return model_data
-
-
-StockMerge("spot").save()

@@ -12,7 +12,9 @@
  * emits:
  *   update:activeTimeFrame / update:modelValue / close
  */
+import { computed, ref, onUnmounted } from "vue"
 import FilterPanel from "./FilterPanel.vue"
+import { useGlobalDataType } from "@/composables/useProjectData"
 
 const props = defineProps({
     activeTimeFrame: { type: String, default: 'day' },
@@ -24,6 +26,11 @@ const emit = defineEmits([
     'update:modelValue',
     'close',
 ])
+
+// 全局数据源类型（gate=货币 / stock=股票）
+const dataType = useGlobalDataType()
+// 股票模式下仅允许「日」级别：其它时间维度静止（不可点击）
+const timeFrameLocked = computed(() => dataType.value === 'stock')
 
 // 时间维度选项（与 DataHeader 保持一致）
 const timeFrameOptions = [
@@ -38,6 +45,24 @@ const timeFrameOptions = [
     { key: 'month3', label: '3月' },
     { key: 'year',   label: '年' },
 ]
+
+// 锁定提示：股票模式下点击/悬浮被禁用的时间维度时给出说明
+const lockHint = ref(false)
+let lockHintTimer = null
+function showLockHint() {
+    if (!timeFrameLocked.value) return
+    lockHint.value = true
+    if (lockHintTimer) clearTimeout(lockHintTimer)
+    lockHintTimer = setTimeout(() => { lockHint.value = false }, 1600)
+}
+function onTfClick(opt) {
+    if (timeFrameLocked.value && opt.key !== 'day') {
+        showLockHint()
+        return
+    }
+    emit('update:activeTimeFrame', opt.key)
+}
+onUnmounted(() => { if (lockHintTimer) clearTimeout(lockHintTimer) })
 </script>
 
 <template>
@@ -64,9 +89,14 @@ const timeFrameOptions = [
                             v-for="opt in timeFrameOptions"
                             :key="opt.key"
                             type="button"
-                            :class="['cp-tf-btn', { active: props.activeTimeFrame === opt.key }]"
-                            @click="emit('update:activeTimeFrame', opt.key)"
+                            :class="['cp-tf-btn', { active: props.activeTimeFrame === opt.key, locked: timeFrameLocked && opt.key !== 'day' }]"
+                            @click="onTfClick(opt)"
+                            @mouseenter="showLockHint"
                         >{{ opt.label }}</button>
+                        <!-- 锁定提示：股票模式仅支持「日」级别 -->
+                        <transition name="lockhint">
+                            <span v-if="lockHint" class="cp-tf-lockhint">股票模式仅支持「日」级别</span>
+                        </transition>
                     </div>
                 </div>
             </section>
@@ -89,3 +119,45 @@ const timeFrameOptions = [
         </div>
     </div>
 </template>
+
+<style scoped>
+/* 锁定提示浮层（股票模式禁用时间维度时） */
+.cp-tf-group {
+    position: relative;
+}
+.cp-tf-lockhint {
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 8px);
+    transform: translateX(-50%);
+    white-space: nowrap;
+    padding: 6px 12px;
+    border-radius: 6px;
+    background: rgba(20, 32, 44, 0.96);
+    border: 1px solid #2b5278;
+    color: #e0edf5;
+    font-size: 12px;
+    line-height: 1;
+    pointer-events: none;
+    z-index: 30;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+.cp-tf-lockhint::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-top-color: #2b5278;
+}
+.lockhint-enter-active,
+.lockhint-leave-active {
+    transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.lockhint-enter-from,
+.lockhint-leave-to {
+    opacity: 0;
+    transform: translateX(-50%) translateY(4px);
+}
+</style>

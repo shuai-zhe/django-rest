@@ -24,7 +24,26 @@ const emit = defineEmits([
 
 const { projectListData, progress } = useProjectData()
 const dataType = useGlobalDataType()
+// 股票模式下仅允许「日」级别：其它时间维度静止（不可点击）
+const timeFrameLocked = computed(() => dataType.value === 'stock')
 const router = useRouter()
+
+// 锁定提示：股票模式下点击/悬浮被禁用的时间维度时给出说明
+const lockHint = ref(false)
+let lockHintTimer = null
+function showLockHint() {
+    if (!timeFrameLocked.value) return
+    lockHint.value = true
+    if (lockHintTimer) clearTimeout(lockHintTimer)
+    lockHintTimer = setTimeout(() => { lockHint.value = false }, 1600)
+}
+function onTfClick(opt) {
+    if (timeFrameLocked.value && opt.key !== 'day') {
+        showLockHint()
+        return
+    }
+    emit('update:activeTimeFrame', opt.key)
+}
 const remaining = computed(() => Math.ceil((1 - progress.value) * 60))
 
 // 跳转到新闻独立页面
@@ -70,6 +89,10 @@ function onThemeChange(t) { theme.value = t }
 function onDataTypeChange(t) {
     setDataType(t)
     emit('update:dataType', t)
+    // 股票模式仅支持「日」级别，若当前非日则强制切回日
+    if (t === 'stock' && props.activeTimeFrame !== 'day') {
+        emit('update:activeTimeFrame', 'day')
+    }
 }
 
 // 功能面板内导航
@@ -102,7 +125,7 @@ onUnmounted(() => {
 
 // ==================== 筛选状态 ====================
 const filterState = reactive({
-    rank:    { presetIdx: -1, customMin: 0, customMax: 250 },    // 默认自定义 0-250
+    rank:    { presetIdx: 1, customMin: null, customMax: null },    // 默认「前150」预设
     vol:     { presetIdx: -2, customMin: null, customMax: null },
     mc:      { presetIdx: -2, customMin: null, customMax: null },
     symbols: '',
@@ -112,6 +135,7 @@ const filterState = reactive({
 // ==================== 预设数据（用于解析） ====================
 const rankPresets = [
     { min: 1,   max: 100 },
+    { min: 1,   max: 150 },
     { min: 101, max: 200 },
     { min: 201, max: 300 },
     { min: 301, max: 500 },
@@ -269,11 +293,16 @@ function onDocSearchClick(e) {
                 <button
                     v-for="opt in timeFrameOptions"
                     :key="opt.key"
-                    :class="['tf-btn', { active: props.activeTimeFrame === opt.key }]"
-                    @click="emit('update:activeTimeFrame', opt.key)"
+                    :class="['tf-btn', { active: props.activeTimeFrame === opt.key, locked: timeFrameLocked && opt.key !== 'day' }]"
+                    @click="onTfClick(opt)"
+                    @mouseenter="showLockHint"
                 >
                     {{ opt.label }}
                 </button>
+                <!-- 锁定提示：股票模式仅支持「日」级别 -->
+                <transition name="lockhint">
+                    <span v-if="lockHint" class="tf-lockhint">股票模式暂仅支持「日」级别</span>
+                </transition>
             </div>
             <select
                 class="timeframe-select"
@@ -284,6 +313,7 @@ function onDocSearchClick(e) {
                     v-for="opt in timeFrameOptions"
                     :key="opt.key"
                     :value="opt.key"
+                    :disabled="timeFrameLocked && opt.key !== 'day'"
                 >
                     {{ opt.label }}
                 </option>
@@ -486,9 +516,69 @@ function onDocSearchClick(e) {
     background: rgba(30, 58, 95, 0.5);
     color: #c8d8e8;
 }
+.tf-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+    background: transparent;
+    color: #5a708a;
+}
+.tf-btn:disabled:hover {
+    background: transparent;
+    color: #5a708a;
+}
+.tf-btn.locked {
+    opacity: 0.35;
+    cursor: not-allowed;
+    background: transparent;
+    color: #5a708a;
+}
+.tf-btn.locked:hover {
+    background: transparent;
+    color: #5a708a;
+}
 .tf-btn.active {
     background: #1e3a5f;
     color: #ffffff;
+}
+
+/* 锁定提示浮层（股票模式禁用时间维度时） */
+.timeframe-bar {
+    position: relative;
+}
+.tf-lockhint {
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 8px);
+    transform: translateX(-50%);
+    white-space: nowrap;
+    padding: 6px 12px;
+    border-radius: 6px;
+    background: rgba(20, 32, 44, 0.96);
+    border: 1px solid #2b5278;
+    color: #e0edf5;
+    font-size: 12px;
+    line-height: 1;
+    pointer-events: none;
+    z-index: 30;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+.tf-lockhint::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-top-color: #2b5278;
+}
+.lockhint-enter-active,
+.lockhint-leave-active {
+    transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.lockhint-enter-from,
+.lockhint-leave-to {
+    opacity: 0;
+    transform: translateX(-50%) translateY(4px);
 }
 
 /* 控制面板入口（功能按钮 + 齿轮 icon 平行排列） */

@@ -246,6 +246,17 @@ const emit = defineEmits([
 }
 .cp-tf-btn:hover { border-color: #3b82c4; color: #c8d8e8; }
 .cp-tf-btn.active { background: #1e3a5f; color: #fff; border-color: #2b5278; }
+.cp-tf-btn.locked {
+    opacity: 0.35;
+    cursor: not-allowed;
+    background: transparent;
+    color: #5a708a;
+    border-color: #1e3a5f;
+}
+.cp-tf-btn.locked:hover {
+    border-color: #1e3a5f;
+    color: #5a708a;
+}
 
 /* 主题开关 */
 .cp-theme-switch {

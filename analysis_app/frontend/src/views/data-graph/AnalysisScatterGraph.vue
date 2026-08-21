@@ -1,7 +1,7 @@
 <script setup>
 import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { useProjectData } from "@/composables/useProjectData"
+import { useProjectData, useGlobalDataType } from "@/composables/useProjectData"
 
 const router = useRouter()
 
@@ -21,6 +21,8 @@ const props = defineProps({
 // ==================== 响应式状态 ====================
 const canvasRef = ref(null)
 const { projectListData, loading, progress, fetchData, startAutoRefresh, stopAutoRefresh } = useProjectData()
+// 全局数据源类型（gate=货币 / stock=股票），用于决定气泡显示名称字段
+const dataType = useGlobalDataType()
 
 // ==================== Canvas 命令式状态（不参与 Vue 响应式） ====================
 let animationId = null
@@ -150,8 +152,10 @@ function buildBubbles(timeFrame) {
     const padding = 12
 
     // 提取涨幅数据
+    // 名称规则：gate 模式显示 name 字段；其它模式保持 display_name || name
+    const isGate = dataType.value === 'gate'
     const raw = filtered.map(d => ({
-        name: d.display_name || d.name,
+        name: isGate ? (d.name || d.display_name) : (d.display_name || d.name),
         code_id: d.code_id,
         rise: getRiseValue(d, timeFrame),
         color: riseColor(getRiseValue(d, timeFrame)),
@@ -356,6 +360,15 @@ function handleMouseLeave() {
 
 // ==================== 数据变化→重建气泡（初次加载 + 定时刷新） ====================
 watch(projectListData, () => {
+    if (projectListData.value.length > 0) {
+        bubbles = buildBubbles(props.activeTimeFrame)
+        selectedBubble = null
+        draggedBubble = null
+    }
+})
+
+// 切换数据源（gate/stock）→ 重建气泡，刷新显示的名称字段
+watch(dataType, () => {
     if (projectListData.value.length > 0) {
         bubbles = buildBubbles(props.activeTimeFrame)
         selectedBubble = null
