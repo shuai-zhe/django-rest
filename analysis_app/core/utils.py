@@ -1,8 +1,68 @@
 import datetime
+import logging
 import re
 import time
 
 from rest_framework.serializers import Serializer
+
+logger = logging.getLogger(__name__)
+
+_ANALYSIS_SYNC_INTERVAL = 60  # 秒
+_analysis_sync_cache = {}
+
+
+def sync_project_analysis(data, code_id, model_class):
+    """用本次 K 线请求已返回的数据计算 24h 统计并回写 Project/StockProject.extra_info.analysis。"""
+    try:
+        now_ts = time.time()
+        # 缓存 key 加上 model_class 的名字，避免不同模块的 code_id 冲突
+        cache_key = f"{model_class.__name__}_{code_id}"
+        last_ts = _analysis_sync_cache.get(cache_key)
+        if last_ts is not None and now_ts - last_ts < _ANALYSIS_SYNC_INTERVAL:
+            return  # 一分钟内已回写，跳过
+
+        klines = (data or {}).get("kline") or []
+        if not klines:
+            return
+
+        # 裁剪最近 24 小时内的 K 线（t 为秒级时间戳）
+        window_start = now_ts - 86400
+        window = [
+            k
+            for k in klines
+            if k.get("t") is not None and float(k["t"]) >= window_start
+        ]
+        if not window:
+            # 返回数据可能全在更早（如 to_date 指定在过去），则回退用全部数据
+            window = klines
+
+        highs = [float(k["h"]) for k in window if k.get("h") is not None]
+        lows = [float(k["l"]) for k in window if k.get("l") is not None]
+        volumes = [float(k["v"]) for k in window if k.get("v") is not None]
+        closes = [float(k["c"]) for k in window if k.get("c") is not None]
+
+        analysis = {
+            "high_24h": max(highs) if highs else None,
+            "low_24h": min(lows) if lows else None,
+            "volume_24h": sum(volumes) if volumes else None,
+            "price": closes[-1] if closes else None,
+            "change_24h_pct": (
+                ((closes[-1] - closes[0]) / closes[0] * 100)
+                if len(closes) >= 2 and closes[0] not in (None, 0)
+                else None
+            ),
+        }
+
+        project = model_class.objects.filter(code_id=code_id).first()
+        if not project:
+            return
+        analysis["market_cap"] = project.market_cap_dict.get("spot")
+        project.extra_info["analysis"] = analysis
+        project.save(update_fields=["extra_info"])
+        _analysis_sync_cache[cache_key] = now_ts
+        logger.info(f"已回写 24h 统计 {model_class.__name__} code_id={code_id}")
+    except Exception as e:
+        logger.warning(f"回写 24h 统计失败 {model_class.__name__} code_id={code_id}: {e}")
 
 
 def serializer_formatter(serializer: Serializer):
