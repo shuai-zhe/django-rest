@@ -119,10 +119,13 @@ if __name__ == "__main__":
 
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "analysis_app.settings")
     django.setup()
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
-    )
+    # 仅在没有任何 handler 时兜底（脱离 Django 单独运行场景），
+    # 避免与 settings.py 中的统一 LOGGING 配置重复输出
+    if not logging.getLogger().handlers:
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+        )
     # 采集 2026-06-01 至今的数据
     # collect_calendar(start_time=datetime.datetime(2026, 1, 1))
     collect_calendar(resume_from_redis=True)

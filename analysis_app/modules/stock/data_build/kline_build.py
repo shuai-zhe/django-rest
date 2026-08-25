@@ -42,14 +42,6 @@ class StockKlineBuild:
                 datetime.datetime.strptime(end_date, "%Y-%m-%d")
                 - datetime.timedelta(days=limit)
             ).strftime("%Y-%m-%d")
-        print(
-            {
-                "code": symbol,
-                "frequency": INTERVAL_TO_FREQ.get(validated_data["interval"], "d"),
-                "start_date": start_date,
-                "end_date": end_date,
-            }
-        )
         return {
             "code": symbol,
             "frequency": INTERVAL_TO_FREQ.get(validated_data["interval"], "d"),
