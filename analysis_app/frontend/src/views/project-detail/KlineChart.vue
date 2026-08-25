@@ -72,19 +72,14 @@ const activeIndicators = computed(() =>
     PRESETS.filter(p => activeIds.value.has(presetKey(p))).map(p => createIndicator(p.id, p.params))
 )
 
-// 最多同时勾选的指标数量；超过时取消最先勾选的一个
-const MAX_INDICATORS = 2
-
+// 指标勾选：独立开关，无数量上限限制
 function toggleIndicator(p) {
     const k = presetKey(p)
     const next = new Set(activeIds.value)
     if (next.has(k)) {
-        next.delete(k)                       // 取消勾选，不受数量上限限制
+        next.delete(k)                       // 取消勾选
     } else {
         next.add(k)                          // 勾选
-        if (next.size > MAX_INDICATORS) {    // 超过上限，移除最先勾选的那个（Set 保留插入顺序）
-            next.delete(next.values().next().value)
-        }
     }
     activeIds.value = next
 }
@@ -115,6 +110,23 @@ const indicatorReadouts = computed(() => {
         res.push({ name: line.name, color: line.color, value: v })
     })
     return res
+})
+
+// 顶部读数自动换行：每行最多显示 3 个指标
+const READOUT_LINE_GAP = 18      // 行高
+const indicatorReadoutLines = computed(() => {
+    const lines = []
+    let cur = []
+    for (const r of indicatorReadouts.value) {
+        const text = `${r.name}: ${formatPrice(r.value)} `
+        if (cur.length >= 3) {
+            lines.push(cur)
+            cur = []
+        }
+        cur.push({ ...r, text })
+    }
+    if (cur.length) lines.push(cur)
+    return lines
 })
 
 // ==================== 视口（dataZoom：固定展示 N 条，可拖动/缩放） ====================
@@ -204,7 +216,7 @@ const chartWidth = 820
 const baseChartHeight = 380
 const isSmallScreen = ref(false)
 const chartHeight = computed(() => isSmallScreen.value ? baseChartHeight * 1.5 : baseChartHeight)
-const chartPad = { top: 20, right: 140, bottom: 40, left: 12 }
+const chartPad = { top: 40, right: 140, bottom: 40, left: 12 }
 const fontScale = computed(() => isSmallScreen.value ? 2 : 1)
 const yAxisFontSize = computed(() => 10 * fontScale.value)
 const yAxisHoverPriceFontSize = computed(() => 8 * fontScale.value)
@@ -642,6 +654,8 @@ function onChartClick(e) {
     lastTapTime = now
     hoverAbs.value = abs
     tapActive.value = true
+    hoverPointerX.value = ((e.clientX - rect.left) / rect.width) * chartWidth
+    hoverPointerY.value = ((e.clientY - rect.top) / rect.height) * chartHeight.value
     // 缓存当前 Y 轴刻度，拖拽 Scrub 时锁定
     fixedYDomain.value = yDomain.value
 }
@@ -698,8 +712,8 @@ const hover = computed(() => {
     if (abs < 0 || !ks || !ks[abs]) return null
     const k = ks[abs]
     const j = abs - viewStart.value
-    const pointerX = Number.isFinite(hoverPointerX.value) ? hoverPointerX.value : xOfRel(j)
-    const pointerY = Number.isFinite(hoverPointerY.value) ? hoverPointerY.value : chartPad.top
+    const pointerX = Number.isFinite(hoverPointerX.value) && hoverPointerX.value >= 0 ? hoverPointerX.value : xOfRel(j)
+    const pointerY = Number.isFinite(hoverPointerY.value) && hoverPointerY.value >= 0 ? hoverPointerY.value : chartPad.top
     const y = Math.min(chartHeight.value - chartPad.bottom, Math.max(chartPad.top, pointerY))
     const yAxisPrice = priceOfY(y)
     const closePrice = Number(k.c)
@@ -864,11 +878,14 @@ onUnmounted(() => {
         >
             <rect class="chart-hit-area" x="0" y="0" :width="chartWidth" :height="chartHeight" />
 
-            <!-- 顶部指标实时读数（悬浮时跟随光标，否则显示最新值） -->
+            <!-- 顶部指标实时读数（悬浮时跟随光标，否则显示最新值），超出宽度自动换行 -->
             <g class="indicator-bar">
-                <text :x="chartPad.left + 4" :y="chartPad.top - 6" class="indicator-readout">
-                    <tspan v-for="(r, i) in indicatorReadouts" :key="'ib-' + i"
-                        :fill="r.color" :dx="i === 0 ? 0 : 13">{{ r.name }}: {{ formatPrice(r.value) }}</tspan>
+                <text v-for="(line, li) in indicatorReadoutLines" :key="'irl-' + li"
+                    :x="chartPad.left + 4"
+                    :y="chartPad.top - 8 + li * READOUT_LINE_GAP"
+                    class="indicator-readout">
+                    <tspan v-for="(r, i) in line" :key="'ib-' + li + '-' + i"
+                        :fill="r.color" :dx="i === 0 ? 0 : 13">{{ r.text }}</tspan>
                 </text>
             </g>
 
@@ -1275,7 +1292,6 @@ onUnmounted(() => {
     font-weight: 600;
     font-variant-numeric: tabular-nums;
 }
-
 /* ---------- 长按进度环动画 ---------- */
 .hold-progress-ring {
     animation: hold-pulse 0.6s ease-in-out infinite alternate;
