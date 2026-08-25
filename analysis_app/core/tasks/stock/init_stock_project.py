@@ -10,6 +10,7 @@ logger = logging.getLogger("init_update_project")
 class StockMerge(ProjectMerge):
     def __init__(self, status, *args, **kwargs):
         super().__init__(status, *args, **kwargs, model=StockProject)
+        self.fields = ["display_name"]
 
     def get_origin_data(self):
         return AkShareStockResource().stock_list()
@@ -30,7 +31,7 @@ class StockMerge(ProjectMerge):
             self.extra_info_update_json(
                 queryset=pm, filed=_, update_data=project.get("extra_info", {}).get(_)
             )
-            for _ in self.extra_info_update_fileds
+            for _ in self.extra_info_update_fields
         ]
         [
             self.status_dict_update(
@@ -39,14 +40,26 @@ class StockMerge(ProjectMerge):
                 status=self.status,
                 update_data=project.get(_[0], {}).get("spot"),
             )
-            for _ in self.status_dict_update_fileds
+            for _ in self.status_dict_update_fields
+        ]
+        [
+            self.fields_update(
+                queryset=pm,
+                filed=_,
+                update_data=project.get(_),
+            )
+            for _ in self.fields
+            for _ in self.fields
         ]
 
     def display_builder(self, project):
         model_data = {
             "name": project["name"],
-            "display_name": project["display_name"],
             "code_id": project["code_id"],
             "code_type": project["code_type"],
         }
         return model_data
+
+
+if __name__ == "__main__":
+    StockMerge("spot").save()
