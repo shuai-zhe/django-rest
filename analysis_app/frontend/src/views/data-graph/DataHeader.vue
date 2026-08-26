@@ -67,21 +67,32 @@ const timeFrameOptions = [
     { key: 'year', label: '年' },
 ]
 
-// ==================== 面板开关 ====================
+// ==================== 面板开关（互斥：同时只能展开一个浮层，避免重叠） ====================
 const panelOpen = ref(false)
-
-function togglePanel() { panelOpen.value = !panelOpen.value }
-function closePanel()  { panelOpen.value = false }
-
-// ==================== 控制面板（设置 / 过滤） ====================
 const ctrlOpen = ref(false)
-function toggleCtrl() { ctrlOpen.value = !ctrlOpen.value }
-function closeCtrl()  { ctrlOpen.value = false }
-
-// ==================== 功能面板（新闻 / 行情首页 等导航） ====================
 const funcOpen = ref(false)
-function toggleFunc() { funcOpen.value = !funcOpen.value }
-function closeFunc()  { funcOpen.value = false }
+
+// 统一互斥切换：仅展开目标浮层，其余全部收起；展开非搜索浮层时也收起搜索下拉
+function soloPanel(which) {
+    panelOpen.value = which === 'panel'
+    ctrlOpen.value = which === 'ctrl'
+    funcOpen.value = which === 'func'
+    if (which !== 'search') closeSearch()
+}
+function togglePanel() { soloPanel(panelOpen.value ? null : 'panel') }
+function toggleCtrl()  { soloPanel(ctrlOpen.value ? null : 'ctrl') }
+function toggleFunc()  { soloPanel(funcOpen.value ? null : 'func') }
+function closePanel()  { panelOpen.value = false }
+function closeCtrl()   { ctrlOpen.value = false }
+function closeFunc()   { funcOpen.value = false }
+
+// 搜索框获得焦点时也收起其余浮层（与按钮浮层互斥，避免重叠）
+function onSearchFocus() {
+    searchOpen.value = true
+    panelOpen.value = false
+    ctrlOpen.value = false
+    funcOpen.value = false
+}
 
 // 主题（示例：可后续扩展为真实换肤）
 const theme = ref('dark')
@@ -380,7 +391,7 @@ function onDocSearchClick(e) {
                     class="ns-input"
                     type="text"
                     placeholder="搜索名称…"
-                    @focus="searchOpen = true"
+                    @focus="onSearchFocus"
                 />
                 <button v-if="searchQuery" class="ns-clear" @click="clearSearch">×</button>
                 <!-- 下拉 -->
