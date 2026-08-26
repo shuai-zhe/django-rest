@@ -41,10 +41,10 @@ const activeMetric = ref([{ op: 'eq', key: 'performance__day', value: 'abs', typ
 function buildFilterConditions() {
     const conds = []
     if (rankMin.value != null && rankMin.value !== '') {
-        conds.push({ op: 'gte', key: 'performance__rank', value: Number(rankMin.value), type: 'metric' })
+        conds.push({ op: 'gte', key: 'rank', value: Number(rankMin.value), type: 'metric' })
     }
     if (rankMax.value != null && rankMax.value !== '') {
-        conds.push({ op: 'lte', key: 'performance__rank', value: Number(rankMax.value), type: 'metric' })
+        conds.push({ op: 'lte', key: 'rank', value: Number(rankMax.value), type: 'metric' })
     }
     if (volMin.value != null && volMin.value !== '') {
         conds.push({ op: 'gte', key: 'volume_dict', value: Number(volMin.value), type: 'metric' })
@@ -70,7 +70,7 @@ function buildFilterConditions() {
 // 统一拼装请求体：指标(单选) + 过滤条件 + 时间维度 + 交易类型
 function buildRequest() {
     return {
-        metric: [...activeMetric.value, ...buildFilterConditions()],
+        filters: [...activeMetric.value, ...buildFilterConditions()],
         time_frame: activeTimeFrame.value,
         trade_type: tradeType.value,
     }

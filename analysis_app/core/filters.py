@@ -55,8 +55,10 @@ class FilterFormatter:
             case "metric":
                 # 指标类型情况下
                 field = value["key"]
-                if field in "performance__":
-                    value["field"] = "extra_info__" + field
+                if "performance__" in field or field in ["rank"]:
+                    # 对时间字段需要进行改装
+                    pass
+                    # value["key"] = "extra_info__" + field
         return value
 
     def filter_format(self, filter_param):
@@ -102,5 +104,6 @@ class FilterFormatter:
             query_list = (
                 query_list & query_dsl if cond == "and" else query_list | query_dsl
             )
+        print(query_list)
         query = query.filter(query_list)
         return query
