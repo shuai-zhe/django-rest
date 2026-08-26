@@ -57,8 +57,7 @@ class FilterFormatter:
                 field = value["key"]
                 if "performance__" in field or field in ["rank"]:
                     # 对时间字段需要进行改装
-                    pass
-                    # value["key"] = "extra_info__" + field
+                    value["key"] = "extra_info__" + field
         return value
 
     def filter_format(self, filter_param):

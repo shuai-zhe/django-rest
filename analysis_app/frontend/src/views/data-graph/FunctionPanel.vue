@@ -31,7 +31,8 @@ const emit = defineEmits([
 ])
 
 // 指标栏默认选中「绝对涨幅」，构造为通配符条件（key 拼接 performance__<时间维度>）
-const DEFAULT_METRIC = { op: 'eq', key: 'performance__day', value: 'abs', type: 'metric' }
+// 默认值跟随当前时间维度，避免排序/筛选一直锁定在 day
+const DEFAULT_METRIC = { op: 'eq', key: `performance__${props.activeTimeFrame}`, value: 'abs', type: 'metric' }
 // 当前选中态（通配符 DSL 数组，受控于父级 metric prop，保证刷新/切换数据源后同步）
 const activeMetric = ref(props.metric.length ? [...props.metric] : [DEFAULT_METRIC])
 
@@ -41,24 +42,26 @@ const dataType = useGlobalDataType()
 const timeFrameLocked = computed(() => dataType.value === 'stock')
 
 // ===== 指标栏（可扩展，单选通配符模式）=====
-// 每个选项对应一个通配符条件：{ op, field, value, type }
+// 每个选项对应一个通配符条件：{ op, key, value, type }
+// 与 home-data-main 的过滤 DSL 同构（type:'metric'），涨幅 key 规则统一为 performance__<时间维度>，
+// 与「涨幅 ≥」过滤复用同一拼接逻辑。
 // value 对应后端 metric 参数：abs=绝对涨幅 / positive=正涨幅 / negative=负涨幅
 // 后续新增指标只需在此数组追加一项即可
 // 注意：涨幅指标互斥，仅允许单选（点击即替换，不追加、不取消）
 const metricOptions = [
-    { key: 'abs',      label: '绝对涨幅',filed:"performance","type":"metric_rate"},
-    { key: 'positive', label: '正涨幅' ,filed:"performance","type":"metric_rate"},
-    { key: 'negative', label: '负涨幅' ,filed:"performance","type":"metric_rate"},
+    { key: 'abs',      label: '绝对涨幅' },
+    { key: 'positive', label: '正涨幅' },
+    { key: 'negative', label: '负涨幅' },
 ]
 // 当前选中的 value 集合（用于模板高亮判断）
 const selectedMetricKeys = computed(() => activeMetric.value.map((m) => m.value))
-// 点击切换选中态（单选通配符模式）：直接替换为当前选项，不追加/取消
+// 构造指标/排序条件：与过滤 DSL 同构，key 拼接 performance__<时间维度>
+function buildMetricCondition(metricKey, timeFrame) {
+    return { op: 'eq', key: `performance__${timeFrame}`, value: metricKey, type: 'metric' }
+}
+// 点击切换选中态（单选通配符模式）：直接替换为当前选项，不追加/不取消
 function onMetricClick(opt) {
-    let field_format = "";
-    if(opt.type==="metric_rate"){
-        field_format = `${opt.filed}__${props.activeTimeFrame}`
-      }
-    const next = { op: 'eq', key:field_format, value: opt.key, type: 'metric' }
+    const next = buildMetricCondition(opt.key, props.activeTimeFrame)
     activeMetric.value = [next]
     emit('update:metric', [next])
 }

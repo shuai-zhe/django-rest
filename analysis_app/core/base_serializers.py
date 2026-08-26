@@ -14,6 +14,9 @@ class BaseProjectSerializer(PageSerializer):
     filters = serializers.ListField(
         child=serializers.DictField(), required=False, label="过滤条件DSL"
     )
+    order_by = serializers.ListField(
+        child=serializers.DictField(), required=False, label="排序条件DSL"
+    )
 
     def build_op(self, op, key, value, type=None, cond="and"):
         _ = {"op": op, "key": key, "value": value, "cond": cond}

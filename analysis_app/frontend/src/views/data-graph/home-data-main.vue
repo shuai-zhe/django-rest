@@ -33,8 +33,33 @@ function onViewDetail(item) {
 const activeTimeFrame = ref('day')
 // 交易类型：spot=现货 / futures=期货 / stock=股票（暂默认 spot，切换数据源时预留）
 const tradeType = ref('spot')
-// 指标栏（单选通配符 DSL 数组，互斥）：绝对涨幅 / 正涨幅 / 负涨幅，key 拼接 performance__<时间维度>
-const activeMetric = ref([{ op: 'eq', key: 'performance__day', value: 'abs', type: 'metric' }])
+// ==================== 通配符 DSL 条件构造（排序 / 过滤 共用一套结构）====================
+// 排序（指标）与过滤均为同一形态的条件：{ op, key, value, type: 'metric' }
+// 涨幅类 key 统一规则：performance__<时间维度>（排序、涨幅≥过滤复用同一 key 规则）
+// 这里集中两个构造器，避免在多处手写拼接字符串导致维度不一致。
+
+// 构造「指标 / 排序」条件：当前选中的涨幅类型（abs / positive / negative）
+function buildMetricCondition(metricKey, timeFrame) {
+    return { op: 'eq', key: `performance__${timeFrame}`, value: metricKey, type: 'metric' }
+}
+// 构造「涨幅 ≥」过滤条件（与排序复用同一 performance__<维度> key 规则）
+function buildRiseFilterCondition(rise, timeFrame) {
+    if (rise == null || rise === '') return null
+    return { op: 'gte', key: `performance__${timeFrame}`, value: Number(rise), type: 'metric' }
+}
+
+// 指标栏（单选通配符 DSL 数组，互斥）：绝对涨幅 / 正涨幅 / 负涨幅
+// 默认值跟随当前时间维度，避免排序/筛选一直锁定在 day
+const activeMetric = ref([buildMetricCondition('abs', activeTimeFrame.value)])
+
+// 指标 key 跟随时间维度：切换时间维度时，把 order_by 中的 performance__<维度> 一并替换，
+// 保留 value（abs/positive/negative），否则排序/筛选会一直停留在旧维度（如 day）。
+// 复用 buildMetricCondition 保证与默认/点击逻辑完全一致。
+// 注：该 watch 注册早于下方聚合 watch，time_frame 变化时会在同一刷新周期内同步改写
+// activeMetric，最终聚合 watch 只触发一次请求。
+watch(activeTimeFrame, (tf) => {
+    activeMetric.value = activeMetric.value.map((m) => buildMetricCondition(m.value, tf))
+})
 
 // 将筛选条件（排名 / 交易量 / 市值 / 涨幅阈值 / 交易所）转换为通配符 DSL 条件数组
 // 排名 → performance__rank，交易量 → volume_dict，市值 → market_cap_dict，涨幅阈值 → performance__<时间维度>
@@ -58,9 +83,8 @@ function buildFilterConditions() {
     if (mcMax.value != null && mcMax.value !== '') {
         conds.push({ op: 'lte', key: 'market_cap_dict', value: Number(mcMax.value), type: 'metric' })
     }
-    if (riseMin.value != null && riseMin.value !== '') {
-        conds.push({ op: 'gte', key: `performance__${activeTimeFrame.value}`, value: Number(riseMin.value), type: 'metric' })
-    }
+    const riseCond = buildRiseFilterCondition(riseMin.value, activeTimeFrame.value)
+    if (riseCond) conds.push(riseCond)
     if (symbols.value) {
         conds.push({ op: 'eq', key: 'symbols', value: symbols.value, type: 'metric' })
     }
@@ -70,7 +94,8 @@ function buildFilterConditions() {
 // 统一拼装请求体：指标(单选) + 过滤条件 + 时间维度 + 交易类型
 function buildRequest() {
     return {
-        filters: [...activeMetric.value, ...buildFilterConditions()],
+        filters: buildFilterConditions(),
+        order_by: [...activeMetric.value],
         time_frame: activeTimeFrame.value,
         trade_type: tradeType.value,
     }
