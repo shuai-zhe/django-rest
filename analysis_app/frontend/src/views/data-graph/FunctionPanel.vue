@@ -12,25 +12,58 @@
  * emits:
  *   update:activeTimeFrame / update:modelValue / close
  */
-import { computed, ref, onUnmounted } from "vue"
+import { computed, ref, watch, onUnmounted } from "vue"
 import FilterPanel from "./FilterPanel.vue"
 import { useGlobalDataType } from "@/composables/useProjectData"
 
 const props = defineProps({
     activeTimeFrame: { type: String, default: 'day' },
+    // metric 为通配符 DSL 数组，例如 [{ op:'eq', field:'metric', value:'abs', type:'metric' }]
+    metric:          { type: Array, default: () => [] },
     modelValue:      { type: Object, default: () => ({}) },
 })
 
 const emit = defineEmits([
     'update:activeTimeFrame',
     'update:modelValue',
+    'update:metric',
     'close',
 ])
+
+// 指标栏默认选中「绝对涨幅」，构造为通配符条件（key 拼接 performance__<时间维度>）
+const DEFAULT_METRIC = { op: 'eq', key: 'performance__day', value: 'abs', type: 'metric' }
+// 当前选中态（通配符 DSL 数组，受控于父级 metric prop，保证刷新/切换数据源后同步）
+const activeMetric = ref(props.metric.length ? [...props.metric] : [DEFAULT_METRIC])
 
 // 全局数据源类型（gate=货币 / stock=股票）
 const dataType = useGlobalDataType()
 // 股票模式下仅允许「日」级别：其它时间维度静止（不可点击）
 const timeFrameLocked = computed(() => dataType.value === 'stock')
+
+// ===== 指标栏（可扩展，单选通配符模式）=====
+// 每个选项对应一个通配符条件：{ op, field, value, type }
+// value 对应后端 metric 参数：abs=绝对涨幅 / positive=正涨幅 / negative=负涨幅
+// 后续新增指标只需在此数组追加一项即可
+// 注意：涨幅指标互斥，仅允许单选（点击即替换，不追加、不取消）
+const metricOptions = [
+    { key: 'abs',      label: '绝对涨幅',filed:"performance","type":"metric_rate"},
+    { key: 'positive', label: '正涨幅' ,filed:"performance","type":"metric_rate"},
+    { key: 'negative', label: '负涨幅' ,filed:"performance","type":"metric_rate"},
+]
+// 当前选中的 value 集合（用于模板高亮判断）
+const selectedMetricKeys = computed(() => activeMetric.value.map((m) => m.value))
+// 点击切换选中态（单选通配符模式）：直接替换为当前选项，不追加/取消
+function onMetricClick(opt) {
+    let field_format = "";
+    if(opt.type==="metric_rate"){
+        field_format = `${opt.filed}__${props.activeTimeFrame}`
+      }
+    const next = { op: 'eq', key:field_format, value: opt.key, type: 'metric' }
+    activeMetric.value = [next]
+    emit('update:metric', [next])
+}
+// 父级 metric 变化（如切换数据源重置）同步到本地选中态
+watch(() => props.metric, (v) => { activeMetric.value = [...v] }, { deep: true })
 
 // 时间维度选项（与 DataHeader 保持一致）
 const timeFrameOptions = [
@@ -73,6 +106,29 @@ onUnmounted(() => { if (lockHintTimer) clearTimeout(lockHintTimer) })
         </div>
 
         <div class="cp-body">
+            <!-- ===== 指标栏（可扩展） ===== -->
+            <section class="cp-section">
+                <h4 class="cp-section-title">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M3 17l6-6 4 4 8-8"/>
+                        <path d="M21 7v6h-6"/>
+                    </svg>
+                    指标
+                </h4>
+                <div class="cp-field">
+                    <div class="cp-metric-group">
+                        <button
+                            v-for="opt in metricOptions"
+                            :key="opt.key"
+                            type="button"
+                            :class="['cp-metric-btn', { active: selectedMetricKeys.includes(opt.key) }]"
+                            @click="onMetricClick(opt)"
+                        >{{ opt.label }}</button>
+                    </div>
+                </div>
+            </section>
+
             <!-- ===== 默认时间维度 ===== -->
             <section class="cp-section">
                 <h4 class="cp-section-title">
@@ -121,6 +177,33 @@ onUnmounted(() => { if (lockHintTimer) clearTimeout(lockHintTimer) })
 </template>
 
 <style scoped>
+/* ===== 指标栏按钮组（复用时间维度按钮视觉） ===== */
+.cp-metric-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.cp-metric-btn {
+    padding: 6px 14px;
+    border-radius: 6px;
+    border: 1px solid #2b3f52;
+    background: #16242f;
+    color: #9fb3c8;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.cp-metric-btn:hover {
+    border-color: #3a6ea5;
+    color: #cfe3f5;
+}
+.cp-metric-btn.active {
+    background: #1f6feb;
+    border-color: #1f6feb;
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(31, 111, 235, 0.35);
+}
+
 /* 锁定提示浮层（股票模式禁用时间维度时） */
 .cp-tf-group {
     position: relative;

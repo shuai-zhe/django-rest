@@ -73,7 +73,8 @@ function createStore() {
     /**
      * 启动自动刷新（同作用域内引用计数，可被多个组件安全调用）
      * @param {number} intervalMs  刷新间隔，默认 60000
-     * @param {object} params      刷新时透传给后端的查询参数，如 { code_id } / { id }
+     * @param {object|function} params  刷新时透传给后端的查询参数；
+     *        可为对象（固定参数）或函数（每次刷新重新计算，确保筛选变化后刷新仍带最新筛选）
      */
     const startAutoRefresh = (intervalMs = 60000, params = {}) => {
         refreshRefCount++
@@ -87,7 +88,9 @@ function createStore() {
         progressRafId = requestAnimationFrame(progressLoop)
 
         autoRefreshTimerId = setInterval(() => {
-            fetchData(true, refreshParams) // force = true，强制刷新；带参数则只刷新指定项目
+            // params 为函数时每次重新计算，避免拿到过期的筛选条件
+            const p = typeof refreshParams === 'function' ? refreshParams() : refreshParams
+            fetchData(true, p) // force = true，强制刷新；带参数则只刷新指定项目
             refreshStartTime = Date.now()
         }, intervalMs)
     }
@@ -107,6 +110,11 @@ function createStore() {
         refreshStartTime = null
         progress.value = 0
         refreshParams = {}
+    }
+
+    // 暴露 currentRefreshParams 供外部查看当前刷新参数（调试用，可选）
+    function getCurrentRefreshParams() {
+        return typeof refreshParams === 'function' ? refreshParams() : refreshParams
     }
 
     return {

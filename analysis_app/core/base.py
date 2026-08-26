@@ -93,7 +93,20 @@ class Resource(APIView, metaclass=abc.ABCMeta):
 
 
 class ResourceVail:
-    def __init__(self, method: str, resource, prefix: str = None, **kwargs):
+    def __init__(
+        self,
+        method: str = None,
+        resource: type[Resource] = None,
+        prefix: str = None,
+        **kwargs,
+    ):
+        """
+        初始化ResourceVail
+        :param method: 请求方法
+        :param resource: 资源类
+        :param prefix: 路由
+        :param kwargs: 其他参数
+        """
         # 定义一个资源类，用于自动校验views视图的入参和返回值校验
         if not (isinstance(resource, type) and issubclass(resource, Resource)):
             raise ModuleNotFoundError("请提供正确的Resource子类")
@@ -115,18 +128,3 @@ class ResourceExtend:
                 raise ModuleNotFoundError(
                     f"配置路由失败：请提供正确的Resource子类.{route.__class__.__name__}"
                 )
-
-
-class FilterFormatter:
-    def filter_format(self, filter_params):
-        """
-        过滤处理 根据传入类型解析；所以的格式应该为 {key:col,value:v,op:operator}
-        key:字段名
-        value:查询值
-        op:操作符：eq、neq、in、nin、gt、gte、lt、lte
-        return 返回一个
-        """
-
-    def filter(self, query, filter_params):
-        # 所有的query查询都应该写成
-        pass

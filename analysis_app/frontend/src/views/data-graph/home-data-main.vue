@@ -1,12 +1,15 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import DataHeader from "./DataHeader.vue"
 import ProjectList from "./ProjectList.vue"
 import AnalysisScatterGraph from "./AnalysisScatterGraph.vue"
-import { useGlobalDataType } from "@/composables/useProjectData"
+import { useGlobalDataType, useProjectData } from "@/composables/useProjectData"
 
 const router = useRouter()
+
+// 首页全量数据实例（用于指标/时间维度变化后重新请求）
+const { fetchData, startAutoRefresh, stopAutoRefresh } = useProjectData()
 
 // 筛选值（由 DataHeader 面板计算后 emit 上来）
 const rankMin = ref(null)
@@ -28,6 +31,92 @@ function onViewDetail(item) {
 
 // 时间维度（由 DataHeader 中的按钮控制）
 const activeTimeFrame = ref('day')
+// 交易类型：spot=现货 / futures=期货 / stock=股票（暂默认 spot，切换数据源时预留）
+const tradeType = ref('spot')
+// 指标栏（单选通配符 DSL 数组，互斥）：绝对涨幅 / 正涨幅 / 负涨幅，key 拼接 performance__<时间维度>
+const activeMetric = ref([{ op: 'eq', key: 'performance__day', value: 'abs', type: 'metric' }])
+
+// 将筛选条件（排名 / 交易量 / 市值 / 涨幅阈值 / 交易所）转换为通配符 DSL 条件数组
+// 排名 → performance__rank，交易量 → volume_dict，市值 → market_cap_dict，涨幅阈值 → performance__<时间维度>
+function buildFilterConditions() {
+    const conds = []
+    if (rankMin.value != null && rankMin.value !== '') {
+        conds.push({ op: 'gte', key: 'performance__rank', value: Number(rankMin.value), type: 'metric' })
+    }
+    if (rankMax.value != null && rankMax.value !== '') {
+        conds.push({ op: 'lte', key: 'performance__rank', value: Number(rankMax.value), type: 'metric' })
+    }
+    if (volMin.value != null && volMin.value !== '') {
+        conds.push({ op: 'gte', key: 'volume_dict', value: Number(volMin.value), type: 'metric' })
+    }
+    if (volMax.value != null && volMax.value !== '') {
+        conds.push({ op: 'lte', key: 'volume_dict', value: Number(volMax.value), type: 'metric' })
+    }
+    if (mcMin.value != null && mcMin.value !== '') {
+        conds.push({ op: 'gte', key: 'market_cap_dict', value: Number(mcMin.value), type: 'metric' })
+    }
+    if (mcMax.value != null && mcMax.value !== '') {
+        conds.push({ op: 'lte', key: 'market_cap_dict', value: Number(mcMax.value), type: 'metric' })
+    }
+    if (riseMin.value != null && riseMin.value !== '') {
+        conds.push({ op: 'gte', key: `performance__${activeTimeFrame.value}`, value: Number(riseMin.value), type: 'metric' })
+    }
+    if (symbols.value) {
+        conds.push({ op: 'eq', key: 'symbols', value: symbols.value, type: 'metric' })
+    }
+    return conds
+}
+
+// 统一拼装请求体：指标(单选) + 过滤条件 + 时间维度 + 交易类型
+function buildRequest() {
+    return {
+        metric: [...activeMetric.value, ...buildFilterConditions()],
+        time_frame: activeTimeFrame.value,
+        trade_type: tradeType.value,
+    }
+}
+
+const AUTO_REFRESH_INTERVAL = 60000
+let autoRefreshStarted = false
+
+function startHomeAutoRefresh() {
+    if (autoRefreshStarted) stopAutoRefresh()
+    startAutoRefresh(AUTO_REFRESH_INTERVAL, buildRequest)
+    autoRefreshStarted = true
+}
+
+function stopHomeAutoRefresh() {
+    if (!autoRefreshStarted) return
+    stopAutoRefresh()
+    autoRefreshStarted = false
+}
+
+function fetchDataAndRestartTimer() {
+    fetchData(true, buildRequest())
+    startHomeAutoRefresh()
+}
+
+// 指标 / 时间维度 / 筛选条件任一变化 → 带参请求后端
+// 注意：此处【不】使用 immediate。
+// 原因：immediate 会在父组件 setup 阶段立即触发一次「仅含指标」的请求（此时子组件
+// DataHeader 的默认筛选尚未 emit 上来），随后 DataHeader 的 filter watch(immediate)
+// 又会将默认筛选（如排名 1-150）emit 上来，再次触发请求，导致刷新首页时发了两次 /gate/project。
+// 改为：首屏请求统一放在 onMounted 中（nextTick 后 DataHeader 已 emit 默认值），
+// 只发一次「指标 + 默认筛选」合并后的请求；watch 仅响应挂载完成后的用户变更。
+let initialFetched = false
+watch(
+    () => [
+        JSON.stringify(activeMetric.value),
+        activeTimeFrame.value,
+        tradeType.value,
+        rankMin.value, rankMax.value,
+        volMin.value, volMax.value, mcMin.value, mcMax.value, riseMin.value, symbols.value,
+    ],
+    () => {
+        if (!initialFetched) return   // 挂载前的默认值 emit 不触发请求，交给 onMounted 统一处理
+        fetchDataAndRestartTimer()
+    },
+)
 
 // 数据源类型（货币=gate / 股票=stock）：全局状态，工具栏切换后全站生效
 const dataType = useGlobalDataType()
@@ -46,6 +135,13 @@ let pressTimer = null
 let tableReached = false   // 用户到达过表格区 → 下次回到气泡图不再滚动提示
 
 onMounted(() => {
+    // 首屏统一请求：等 nextTick 后 DataHeader 已把默认筛选（如排名 1-150）emit 上来，
+    // 这里一次只发「指标 + 默认筛选」合并后的请求，避免重复请求。
+    nextTick(() => {
+        initialFetched = true
+        fetchDataAndRestartTimer()
+    })
+
     // 用 IntersectionObserver 监听哪个节段占据视口
     observer = new IntersectionObserver((entries) => {
         let bestTarget = null
@@ -86,9 +182,11 @@ onMounted(() => {
         chartEl.addEventListener('pointerup', onPointerUp)
         chartEl.addEventListener('pointercancel', onPointerUp)
     }
+
 })
 
 onUnmounted(() => {
+    stopHomeAutoRefresh()
     if (observer) observer.disconnect()
     const container = scrollContainerRef.value
     if (container) container.removeEventListener('scroll', onScrollHint)
@@ -151,8 +249,10 @@ function onPointerUp() {
         <DataHeader
             :active-time-frame="activeTimeFrame"
             :data-type="dataType"
+            :metric="activeMetric"
             :hidden="showTable"
             @update:active-time-frame="activeTimeFrame = $event"
+            @update:metric="activeMetric = $event"
             @update:rank-min="rankMin = $event"
             @update:rank-max="rankMax = $event"
             @update:mc-min="mcMin = $event"

@@ -159,3 +159,7 @@ class ProjectMerge:
             )
 
         logger.info(f"创建：{count_dict['create']}，更新：{count_dict['update']}")
+
+
+if __name__ == "__main__":
+    ProjectMerge("spot").save()

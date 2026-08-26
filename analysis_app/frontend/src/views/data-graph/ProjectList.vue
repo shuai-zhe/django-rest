@@ -99,35 +99,9 @@ function updateSort() {
         sortedData.value = []
         return
     }
-    // 按排名 / 市值 / 成交量 / symbols / 涨幅阈值 过滤
-    const filtered = raw.filter(d => {
-        const rank = d.extra_info?.rank ?? 999
-        if (props.rankMin != null && rank < props.rankMin) return false
-        if (props.rankMax != null && rank > props.rankMax) return false
-        const mc = d.market_cap_dict?.spot ?? 0
-        if (props.mcMin != null && mc < props.mcMin) return false
-        if (props.mcMax != null && mc > props.mcMax) return false
-        const vol = d.volume_dict?.spot ?? 0
-        if (props.volMin != null && vol < props.volMin) return false
-        if (props.volMax != null && vol > props.volMax) return false
-        // 交易所过滤（extra_info.symbols 中是否有选中的交易所）
-        if (props.symbols) {
-            const syms = d.extra_info?.symbols
-            if (!syms || !syms[props.symbols]) return false
-        }
-        // 涨幅阈值（按绝对值，涨跌都算）
-        if (props.riseMin != null) {
-            const rise = d.extra_info?.performance?.day ?? 0
-            if (Math.abs(rise) < props.riseMin) return false
-        }
-        return true
-    })
-    if (filtered.length === 0) {
-        sortedData.value = []
-        return
-    }
+    
     const desc = sortDesc.value
-    let result = filtered.slice().sort((a, b) => {
+    let result = raw.slice().sort((a, b) => {
         const va = getSortValue(a)
         const vb = getSortValue(b)
         const diff = va - vb
@@ -156,9 +130,10 @@ function sortArrow(key) {
     return sortDesc.value ? ' ▼' : ' ▲'
 }
 
-// 拉取数据（共享，只会请求一次）
+// 拉取数据：不再自行发起无参请求。首页全量数据由 home-data-main 统一在 onMounted
+// 中带参拉取（指标 + 默认筛选合并一次完成），此处仅消费共享 store 的数据。
 onMounted(() => {
-    fetchData().then(() => updateSort())
+    updateSort()
 })
 
 // 定时刷新时自动重排序

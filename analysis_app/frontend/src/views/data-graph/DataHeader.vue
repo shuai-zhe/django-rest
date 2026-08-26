@@ -9,6 +9,7 @@ import FunctionPanel from "./FunctionPanel.vue"
 const props = defineProps({
     activeTimeFrame: { type: String, default: 'day' },
     dataType:        { type: String, default: 'gate' },
+    metric:          { type: Array, default: () => [{ op: 'eq', key: 'performance__day', value: 'abs', type: 'metric' }] },
 })
 
 const emit = defineEmits([
@@ -19,6 +20,7 @@ const emit = defineEmits([
     'update:activeTimeFrame',
     'update:dataType',
     'update:searchName',
+    'update:metric',
     'viewDetail',
 ])
 
@@ -125,7 +127,7 @@ onUnmounted(() => {
 
 // ==================== 筛选状态 ====================
 const filterState = reactive({
-    rank:    { presetIdx: 1, customMin: null, customMax: null },    // 默认「前150」预设
+    rank:    { presetIdx: 0, customMin: null, customMax: null },     // 默认 1-100
     vol:     { presetIdx: -2, customMin: null, customMax: null },
     mc:      { presetIdx: -2, customMin: null, customMax: null },
     symbols: '',
@@ -181,13 +183,28 @@ function isSectionActive(section) {
 }
 
 // ==================== 监听变化 → 发射 resolved 值 ====================
-watch(filterState, () => {
+// 深层合并：原地修改 filterState 各子对象的属性（而非整块替换引用），
+// 确保 reactive 嵌套对象的 deep watch 稳定触发，避免点击排名/过滤不发送请求。
+function emitResolved() {
     const r = resolveRank();  emit('update:rankMin', r.min);   emit('update:rankMax', r.max)
     const v = resolveVol();   emit('update:volMin',  v.min);   emit('update:volMax',  v.max)
     const m = resolveMc();    emit('update:mcMin',   m.min);   emit('update:mcMax',   m.max)
     emit('update:symbols', filterState.symbols)
     emit('update:riseMin', filterState.riseMin)
-}, { deep: true, immediate: true })
+}
+
+function onFilterChange(payload) {
+    if (!payload) return
+    if (payload.rank)    Object.assign(filterState.rank, payload.rank)
+    if (payload.vol)     Object.assign(filterState.vol, payload.vol)
+    if (payload.mc)      Object.assign(filterState.mc, payload.mc)
+    if ('symbols' in payload) filterState.symbols = payload.symbols
+    if ('riseMin' in payload) filterState.riseMin = payload.riseMin
+    
+    emitResolved() // 同步 emit，确保用户交互立即更新并触发请求
+}
+
+watch(filterState, emitResolved, { deep: true, immediate: true })
 
 // ==================== 活跃筛选计数 ====================
 const activeCount = computed(() => {
@@ -337,7 +354,7 @@ function onDocSearchClick(e) {
                 <FilterPanel
                     v-if="panelOpen"
                     :model-value="filterState"
-                    @update:model-value="Object.assign(filterState, $event)"
+                    @update:model-value="onFilterChange($event)"
                     @close="closePanel"
                     class="panel-instance"
                 />
@@ -429,9 +446,11 @@ function onDocSearchClick(e) {
                 <FunctionPanel
                     v-if="funcOpen"
                     :active-time-frame="props.activeTimeFrame"
+                    :metric="props.metric"
                     :model-value="filterState"
                     @update:active-time-frame="emit('update:activeTimeFrame', $event)"
-                    @update:model-value="Object.assign(filterState, $event)"
+                    @update:metric="emit('update:metric', $event)"
+                    @update:model-value="onFilterChange($event)"
                     @close="closeFunc"
                 />
             </div>
