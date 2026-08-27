@@ -44,4 +44,5 @@ class BaseProjectSerializer(PageSerializer):
             value = attrs.get(field)
             if value:
                 filters.append(self.build_op("contains", field, value))
+        attrs["filters"] = filters
         return attrs

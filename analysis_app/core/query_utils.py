@@ -7,7 +7,7 @@ class QueryBuild:
     """
 
     SUFFIXES = {
-        "eq": "__in",
+        "eq": "",
         "include": "__contains",
         "contains": "__icontains",
         "gt": "__gt",

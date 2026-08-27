@@ -585,7 +585,7 @@ onUnmounted(() => {
         <!-- Canvas 区域 -->
         <div class="canvas-wrapper">
             <canvas ref="canvasRef" id="bubbleCanvas"></canvas>
-            <div v-if="loading && projectListData.length === 0" class="loading-overlay">
+            <div v-if="loading" class="loading-overlay" :class="{ 'is-refresh': projectListData.length > 0 }">
                 <div class="loading-spinner"></div>
                 <span>加载数据中...</span>
             </div>
@@ -647,6 +647,26 @@ onUnmounted(() => {
     color: #8ba4be;
     font-size: 14px;
     border-radius: 8px;
+}
+
+/* 刷新态（已有数据时过滤/切换）：半透明全屏遮罩，保留旧气泡图可见，但明确提示加载中 */
+.loading-overlay.is-refresh {
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 12px;
+    background: rgba(15, 25, 35, 0.55);
+}
+
+.loading-overlay.is-refresh .loading-spinner {
+    width: 36px;
+    height: 36px;
+    border-width: 3px;
+}
+
+.loading-overlay.is-refresh span {
+    font-size: 14px;
+    color: #c8d8e8;
 }
 
 .loading-spinner {
