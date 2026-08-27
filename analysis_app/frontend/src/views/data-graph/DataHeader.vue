@@ -9,7 +9,7 @@ import FunctionPanel from "./FunctionPanel.vue"
 const props = defineProps({
     activeTimeFrame: { type: String, default: 'day' },
     dataType:        { type: String, default: 'gate' },
-    metric:          { type: Array, default: () => [{ op: 'eq', key: 'performance__day', value: 'abs', type: 'metric' }] },
+    metric:          { type: Array, default: () => [] },
 })
 
 const emit = defineEmits([
@@ -138,7 +138,7 @@ onUnmounted(() => {
 
 // ==================== 筛选状态 ====================
 const filterState = reactive({
-    rank:    { presetIdx: 0, customMin: null, customMax: null },     // 默认 1-100
+    rank:    { presetIdx: -2, customMin: null, customMax: null },    // 默认不限（不过滤）
     vol:     { presetIdx: -2, customMin: null, customMax: null },
     mc:      { presetIdx: -2, customMin: null, customMax: null },
     symbols: '',
