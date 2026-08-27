@@ -1,7 +1,7 @@
-from django.db.models import Q
+from django.db.models import F, Func, Q, QuerySet, Value
 
 
-class FilterFormatter:
+class QueryBuild:
     """
     过滤器格式化器
     """
@@ -16,9 +16,28 @@ class FilterFormatter:
         "lte": "__lte",
         "json__in": "__in",
     }
+    RATE = {
+        "abs": Func(
+            Func(
+                F("extra_info"),
+                Value("$.performance.day"),
+                function="JSON_EXTRACT",
+            ),
+            function="ABS",
+        ).desc(),
+        "positive": "-",
+        "negative": "+",
+    }
 
-    def __init__(self, filter_params: list[dict]):
+    def __init__(
+        self,
+        query: QuerySet,
+        filter_params: list[dict] = None,
+        order_params: list[dict] | str = None,
+    ):
+        self.query = query
         self.filter_params = filter_params or []
+        self.order_params = order_params or []
 
     @staticmethod
     def _default(param: dict):
@@ -83,7 +102,7 @@ class FilterFormatter:
             filter_format_dict.append(self.formatter(filter_param))
         return filter_format_dict
 
-    def filter(self, query):
+    def filter(self):
         # 所有的query查询都应该写成
         query_list = Q()
         for param in self.filter_format(self.filter_params):
@@ -103,6 +122,51 @@ class FilterFormatter:
             query_list = (
                 query_list & query_dsl if cond == "and" else query_list | query_dsl
             )
-        print(query_list)
-        query = query.filter(query_list)
-        return query
+        self.query = self.query.filter(query_list)
+
+        return self.query
+
+    def order_format(self, order_params):
+        """
+        排序处理 根据传入类型解析；所以的格式应该为 {key:col,value:v,op:operator}
+        key:字段名
+        value:查询值
+        op:操作符：eq、include、gt、gte、lt、lte
+        cond:条件：and、or
+        return 返回一个
+        """
+        if isinstance(order_params, str):
+            return order_params
+        order_ = []
+        for order_param in order_params:
+            if order_param is None:
+                continue
+            if isinstance(order_param, dict):
+                if order_param.get("type", "") == "metric":
+                    _ = self.RATE.get(order_param["value"])
+                    if not _:
+                        continue
+                    if _ in ["-", "+"]:
+                        field = f"extra_info__{order_param['key']}"
+                        order_.append(f"{_}{field}".replace("+", ""))
+                        if "performance" in order_param["key"]:
+                            performance_filter = {
+                                field + "__gt" if _ == "-" else field + "__lt": 0
+                            }
+                            self.query = self.query.filter(**performance_filter)
+                    elif _:
+                        order_.append(_)  # 特殊值 直接排序
+        return order_
+
+    def order_by(self):
+        order_ = self.order_format(self.order_params)
+        if not order_:
+            return self.query
+        self.query = self.query.order_by(*order_)
+        return self.query
+
+    def exec(self):
+        """执行全部数据操作"""
+        self.filter()
+        self.order_by()
+        return self.query
