@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "rest_framework",
+    "core.models",
     "modules.gate",
     "modules.new",
     "modules.stock",

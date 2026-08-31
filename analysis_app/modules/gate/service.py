@@ -8,7 +8,7 @@ class GateService:
         return obj.values()
 
     def get_project_all(self, **kwargs):
-        _ = Project.objects.filter()
+        _ = Project.active_obj.filter()
         filter_format = kwargs.get("filter_format", {})
         if filter_format:
             _ = _.filter(**filter_format)

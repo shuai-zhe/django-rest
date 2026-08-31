@@ -1,11 +1,13 @@
 from django.db import models
 
 from core.constants import StockTrade
+from core.models.base_manager import BaseManager
+from core.models.base_model import BaseModel
 
 # Create your models here.
 
 
-class StockProject(models.Model):
+class StockProject(BaseModel):
     id = models.AutoField(primary_key=True)
     name = models.CharField(max_length=100, verbose_name="项目名称")
     display_name = models.CharField(max_length=100, verbose_name="项目显示名称")
@@ -24,6 +26,8 @@ class StockProject(models.Model):
     )
     create_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
     update_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
+    objects = models.Manager()
+    active_obj = BaseManager()
 
     def get_stock_id(self, dtype):
         """

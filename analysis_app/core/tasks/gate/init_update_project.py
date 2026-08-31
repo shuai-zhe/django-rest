@@ -1,5 +1,7 @@
 import logging
 
+from django.utils import timezone
+
 from apis.cryptobubbles.default import _CryptobubblesApi
 from modules.gate.models import Project
 
@@ -18,6 +20,9 @@ class ProjectMerge:
         self.model = model or Project
         # 需要的交易所
         self.code_id = "gateio"
+        self.fields = []
+        self.base_fields = {"update_at": timezone.now(), "active": 1}
+        self.no_active_data = []
         # 筛选已存在的数据
         self.base_project = self.get_origin_data()
         self.base_project_code_id = self.base_project_code_id()
@@ -37,7 +42,11 @@ class ProjectMerge:
             ("volume_dict", "volume"),
             ("market_cap_dict", "marketcap"),
         )
-        self.fields = []
+
+    def base_filed_build_update(self, model):
+        for field, value in self.base_fields.items():
+            if getattr(model, field):
+                setattr(model, field, value)
 
     def get_origin_data(self):
         return [
@@ -50,10 +59,11 @@ class ProjectMerge:
         return {_["name"] for _ in self.base_project}
 
     def exist_project(self):
-        return (
-            set(self.model.objects.values_list("display_name", flat=True))
-            & self.base_project_code_id
-        )
+        all_data = set(self.model.objects.values_list("display_name", flat=True))
+        active_data = all_data & self.base_project_code_id
+        self.no_active_data = all_data - self.base_project_code_id
+
+        return active_data
 
     def extra_info_update_json(self, queryset, filed, update_data):
         query_value = queryset.extra_info.get(filed)
@@ -136,6 +146,7 @@ class ProjectMerge:
                 if project["name"] in self.exist_project:
                     pm = self.model.objects.get(**model_data)
                     update_project_list.append(pm)
+                    self.base_filed_build_update(pm)
                     self.init_update_build(pm, project)
                     count_dict["update"] += 1
                 else:
@@ -146,6 +157,7 @@ class ProjectMerge:
             except Exception as e:
                 logger.error(f"Stock数据：创建项目失败：{e}")
                 continue
+
         if create_project_list:
             logger.info(f"批量创建：{len(create_project_list)}")
             self.model.objects.bulk_create(create_project_list)
@@ -154,8 +166,32 @@ class ProjectMerge:
             logger.info(f"批量更新：{len(update_project_list)}")
             self.model.objects.bulk_update(
                 update_project_list,
-                fields=["extra_info", "price_dict", "volume_dict", "market_cap_dict"]
+                fields=[
+                    "extra_info",
+                    "price_dict",
+                    "volume_dict",
+                    "market_cap_dict",
+                    "update_at",
+                ]
                 + self.fields,
             )
 
-        logger.info(f"创建：{count_dict['create']}，更新：{count_dict['update']}")
+        # 关闭无效数据
+        no_active_list = self.model.objects.filter(
+            display_name__in=self.no_active_data, active=1
+        )
+        no_active_count = 0
+        if no_active_list.exists():
+            no_active_count = no_active_list.count()
+            logger.info(f"批量关闭：{no_active_count}")
+            no_active_list.update(active=0)
+
+        logger.info(
+            f"创建：{count_dict['create']}，更新：{count_dict['update']};关闭：{no_active_count}"
+        )
+
+
+if __name__ == "__main__":
+    """定时更新项目数据的Celery任务"""
+    project_merge = ProjectMerge(status="spot")
+    project_merge.save()

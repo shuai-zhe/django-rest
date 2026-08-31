@@ -1,7 +1,7 @@
 import axios from 'axios'
 
 const baseURL = import.meta.env.MODE === 'development'
-  ? 'http://30.25.59.26:8001'
+  ? 'http://192.168.18.1:8001'
   : 'http://43.136.20.216:5001'
 
 // 创建axios实例
