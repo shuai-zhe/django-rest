@@ -195,3 +195,7 @@ if __name__ == "__main__":
     """定时更新项目数据的Celery任务"""
     project_merge = ProjectMerge(status="spot")
     project_merge.save()
+
+
+if __name__ == "__main__":
+    ProjectMerge("spot").save()

@@ -13,7 +13,9 @@ function resolvePrefix(dataType) {
 
 export const ProjectList=(params = {}, dataType = DEFAULT_DATA_TYPE)=>{
     // 列表接口：<prefix>/project
-    return request.get(`${resolvePrefix(dataType)}/project`, { params })
+    // 使用 POST：指标通配符 DSL（metric[] 数组条件）放在请求体中，
+    // 避免复杂嵌套结构序列化进 query string 导致后端解析困难
+    return request.post(`${resolvePrefix(dataType)}/project`, params)
 }
 
 export const ProjectKline=(params, dataType = DEFAULT_DATA_TYPE)=>{

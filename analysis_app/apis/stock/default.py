@@ -33,7 +33,7 @@ class StockResource(abc.ABC):
                 symbols[code_type.value] = code_type.translate
 
         return {
-            "rank": "-",
+            "rank": origin_data.get("rank", 0),
             "symbols": symbols,
             "performance": {
                 "day": origin_data.get("涨跌幅", 0),
@@ -111,10 +111,11 @@ class StockResource(abc.ABC):
 
 class AkShareStockResource(StockResource):
     def stock_list(self) -> list:
-        return [
-            self.stock_format(data)
-            for data in ak.stock_zh_a_spot().to_dict(orient="records")
-        ]
+        df = ak.stock_zh_a_spot()
+        # 根据涨跌幅排序
+        df["rank"] = df["涨跌幅"].rank(ascending=False, method="first").astype("int")
+        df = df.to_dict(orient="records")
+        return [self.stock_format(row) for row in df]
 
     def stock_kline(
         self, symbol, period, start_date, end_date, adjust: str = ""

@@ -1,6 +1,5 @@
-from django.db.models import F, Func, Value
-
 from core.constants import StockTrade
+from core.query_utils import QueryBuild
 from modules.stock.models import StockProject
 
 from .data_build.kline_build import _StockKline
@@ -16,22 +15,11 @@ class StockService:
         return data
 
     def get_project_all(self, **kwargs):
-        _ = StockProject.active_obj.filter()
-        filter_format = kwargs.get("filter_format", {})
-        if filter_format:
-            _ = _.filter(**filter_format)
-        # 股票类型在后台限制最多展示 500 条数据
-        # 按 extra_info.performance.day 的绝对值降序（正负一视同仁）
-        day_abs = Func(
-            Func(
-                F("extra_info"),
-                Value("$.performance.day"),
-                function="JSON_EXTRACT",
-            ),
-            function="ABS",
-        )
-        _ = _.order_by(day_abs.desc())[:500]
-        return self.formatter(_)
+        query = StockProject.active_obj.all()
+        filters = kwargs.get("filters", [])
+        order_by = kwargs.get("order_by", [])
+        query = QueryBuild(query, filters, order_by).exec()
+        return self.formatter(query)[:100]
 
     def get_kline_all(self, validated_data, **kwargs):
         # 后续封装自动查找和错误切换

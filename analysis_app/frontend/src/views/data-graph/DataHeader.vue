@@ -9,6 +9,7 @@ import FunctionPanel from "./FunctionPanel.vue"
 const props = defineProps({
     activeTimeFrame: { type: String, default: 'day' },
     dataType:        { type: String, default: 'gate' },
+    metric:          { type: Array, default: () => [] },
 })
 
 const emit = defineEmits([
@@ -19,6 +20,7 @@ const emit = defineEmits([
     'update:activeTimeFrame',
     'update:dataType',
     'update:searchName',
+    'update:metric',
     'viewDetail',
 ])
 
@@ -65,21 +67,32 @@ const timeFrameOptions = [
     { key: 'year', label: '年' },
 ]
 
-// ==================== 面板开关 ====================
+// ==================== 面板开关（互斥：同时只能展开一个浮层，避免重叠） ====================
 const panelOpen = ref(false)
-
-function togglePanel() { panelOpen.value = !panelOpen.value }
-function closePanel()  { panelOpen.value = false }
-
-// ==================== 控制面板（设置 / 过滤） ====================
 const ctrlOpen = ref(false)
-function toggleCtrl() { ctrlOpen.value = !ctrlOpen.value }
-function closeCtrl()  { ctrlOpen.value = false }
-
-// ==================== 功能面板（新闻 / 行情首页 等导航） ====================
 const funcOpen = ref(false)
-function toggleFunc() { funcOpen.value = !funcOpen.value }
-function closeFunc()  { funcOpen.value = false }
+
+// 统一互斥切换：仅展开目标浮层，其余全部收起；展开非搜索浮层时也收起搜索下拉
+function soloPanel(which) {
+    panelOpen.value = which === 'panel'
+    ctrlOpen.value = which === 'ctrl'
+    funcOpen.value = which === 'func'
+    if (which !== 'search') closeSearch()
+}
+function togglePanel() { soloPanel(panelOpen.value ? null : 'panel') }
+function toggleCtrl()  { soloPanel(ctrlOpen.value ? null : 'ctrl') }
+function toggleFunc()  { soloPanel(funcOpen.value ? null : 'func') }
+function closePanel()  { panelOpen.value = false }
+function closeCtrl()   { ctrlOpen.value = false }
+function closeFunc()   { funcOpen.value = false }
+
+// 搜索框获得焦点时也收起其余浮层（与按钮浮层互斥，避免重叠）
+function onSearchFocus() {
+    searchOpen.value = true
+    panelOpen.value = false
+    ctrlOpen.value = false
+    funcOpen.value = false
+}
 
 // 主题（示例：可后续扩展为真实换肤）
 const theme = ref('dark')
@@ -125,7 +138,7 @@ onUnmounted(() => {
 
 // ==================== 筛选状态 ====================
 const filterState = reactive({
-    rank:    { presetIdx: 1, customMin: null, customMax: null },    // 默认「前150」预设
+    rank:    { presetIdx: -2, customMin: null, customMax: null },    // 默认不限（不过滤）
     vol:     { presetIdx: -2, customMin: null, customMax: null },
     mc:      { presetIdx: -2, customMin: null, customMax: null },
     symbols: '',
@@ -181,13 +194,28 @@ function isSectionActive(section) {
 }
 
 // ==================== 监听变化 → 发射 resolved 值 ====================
-watch(filterState, () => {
+// 深层合并：原地修改 filterState 各子对象的属性（而非整块替换引用），
+// 确保 reactive 嵌套对象的 deep watch 稳定触发，避免点击排名/过滤不发送请求。
+function emitResolved() {
     const r = resolveRank();  emit('update:rankMin', r.min);   emit('update:rankMax', r.max)
     const v = resolveVol();   emit('update:volMin',  v.min);   emit('update:volMax',  v.max)
     const m = resolveMc();    emit('update:mcMin',   m.min);   emit('update:mcMax',   m.max)
     emit('update:symbols', filterState.symbols)
     emit('update:riseMin', filterState.riseMin)
-}, { deep: true, immediate: true })
+}
+
+function onFilterChange(payload) {
+    if (!payload) return
+    if (payload.rank)    Object.assign(filterState.rank, payload.rank)
+    if (payload.vol)     Object.assign(filterState.vol, payload.vol)
+    if (payload.mc)      Object.assign(filterState.mc, payload.mc)
+    if ('symbols' in payload) filterState.symbols = payload.symbols
+    if ('riseMin' in payload) filterState.riseMin = payload.riseMin
+    
+    emitResolved() // 同步 emit，确保用户交互立即更新并触发请求
+}
+
+watch(filterState, emitResolved, { deep: true, immediate: true })
 
 // ==================== 活跃筛选计数 ====================
 const activeCount = computed(() => {
@@ -337,7 +365,7 @@ function onDocSearchClick(e) {
                 <FilterPanel
                     v-if="panelOpen"
                     :model-value="filterState"
-                    @update:model-value="Object.assign(filterState, $event)"
+                    @update:model-value="onFilterChange($event)"
                     @close="closePanel"
                     class="panel-instance"
                 />
@@ -363,7 +391,7 @@ function onDocSearchClick(e) {
                     class="ns-input"
                     type="text"
                     placeholder="搜索名称…"
-                    @focus="searchOpen = true"
+                    @focus="onSearchFocus"
                 />
                 <button v-if="searchQuery" class="ns-clear" @click="clearSearch">×</button>
                 <!-- 下拉 -->
@@ -429,9 +457,11 @@ function onDocSearchClick(e) {
                 <FunctionPanel
                     v-if="funcOpen"
                     :active-time-frame="props.activeTimeFrame"
+                    :metric="props.metric"
                     :model-value="filterState"
                     @update:active-time-frame="emit('update:activeTimeFrame', $event)"
-                    @update:model-value="Object.assign(filterState, $event)"
+                    @update:metric="emit('update:metric', $event)"
+                    @update:model-value="onFilterChange($event)"
                     @close="closeFunc"
                 />
             </div>

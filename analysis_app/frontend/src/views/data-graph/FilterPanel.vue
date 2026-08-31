@@ -44,7 +44,7 @@ const mcVolPresets = [
 
 // ==================== 本地状态 ====================
 const local = reactive({
-    rank:    { presetIdx: 1, customMin: null, customMax: null },    // 默认「前150」预设
+    rank:    { presetIdx: 0, customMin: null, customMax: null },     // 默认 1-100
     vol:     { presetIdx: -2, customMin: null, customMax: null },
     mc:      { presetIdx: -2, customMin: null, customMax: null },
     symbols: '',
@@ -127,7 +127,7 @@ function updateInput(section, field, val) {
 }
 
 function handleReset() {
-    local.rank    = { presetIdx: 1, customMin: null, customMax: null }    // 恢复「前150」预设
+    local.rank    = { presetIdx: 0, customMin: null, customMax: null }     // 恢复默认 1-100
     local.vol     = { presetIdx: -2, customMin: null, customMax: null }
     local.mc      = { presetIdx: -2, customMin: null, customMax: null }
     local.symbols = ''
@@ -336,7 +336,7 @@ defineExpose({ activeTags, handleReset })
                     @change="local.riseMin = $event.target.value === '' ? null : Number($event.target.value); emitChange()"
                     min="0" />
             </div>
-            <button class="confirm-btn" @click="$emit('close')">确定</button>
+<!--            <button class="confirm-btn" @click="$emit('close')">确定</button>-->
             <button class="reset-btn" @click="handleReset">重置</button>
         </div>
     </div>

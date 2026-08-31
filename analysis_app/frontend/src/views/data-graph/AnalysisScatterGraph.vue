@@ -20,7 +20,7 @@ const props = defineProps({
 
 // ==================== 响应式状态 ====================
 const canvasRef = ref(null)
-const { projectListData, loading, progress, fetchData, startAutoRefresh, stopAutoRefresh } = useProjectData()
+const { projectListData, loading } = useProjectData()
 // 全局数据源类型（gate=货币 / stock=股票），用于决定气泡显示名称字段
 const dataType = useGlobalDataType()
 
@@ -122,29 +122,10 @@ function buildBubbles(timeFrame) {
     const items = projectListData.value
     if (!items || items.length === 0) return []
 
-    // 过滤掉涨幅为 0 的项目 + 排名/市值/成交量/symbols/涨幅阈值
+    // 过滤掉涨幅为 0 的项目（气泡图不展示无涨跌的项目）
     const filtered = items.filter(d => {
         const rise = getRiseValue(d, timeFrame)
         if (rise === 0) return false
-        // 涨幅阈值（按绝对值，涨跌都算）
-        if (props.riseMin != null && Math.abs(rise) < props.riseMin) return false
-        // 排名范围
-        const rank = d.extra_info?.rank ?? 999
-        if (props.rankMin != null && rank < props.rankMin) return false
-        if (props.rankMax != null && rank > props.rankMax) return false
-        // 市值范围
-        const mc = d.market_cap_dict?.spot ?? 0
-        if (props.mcMin != null && mc < props.mcMin) return false
-        if (props.mcMax != null && mc > props.mcMax) return false
-        // 成交量范围
-        const vol = d.volume_dict?.spot ?? 0
-        if (props.volMin != null && vol < props.volMin) return false
-        if (props.volMax != null && vol > props.volMax) return false
-        // 交易所过滤（extra_info.symbols 中是否有选中的交易所）
-        if (props.symbols) {
-            const syms = d.extra_info?.symbols
-            if (!syms || !syms[props.symbols]) return false
-        }
         return true
     })
     if (filtered.length === 0) return []
@@ -586,15 +567,10 @@ onMounted(() => {
         buildAtCurrentSize()
     }
 
-    // 拉取项目数据（共享，只会请求一次），就绪后启动 60s 定时刷新
-    fetchData().then(() => {
-        buildAtCurrentSize()
-        startAutoRefresh(60000)
-    })
+    // 数据请求与 60s 自动刷新统一由 home-data-main 管理，当前组件只消费共享数据并负责绘制
 })
 
 onUnmounted(() => {
-    stopAutoRefresh()
     if (animationId) {
         cancelAnimationFrame(animationId)
         animationId = null
@@ -609,7 +585,7 @@ onUnmounted(() => {
         <!-- Canvas 区域 -->
         <div class="canvas-wrapper">
             <canvas ref="canvasRef" id="bubbleCanvas"></canvas>
-            <div v-if="loading && projectListData.length === 0" class="loading-overlay">
+            <div v-if="loading" class="loading-overlay" :class="{ 'is-refresh': projectListData.length > 0 }">
                 <div class="loading-spinner"></div>
                 <span>加载数据中...</span>
             </div>
@@ -671,6 +647,26 @@ onUnmounted(() => {
     color: #8ba4be;
     font-size: 14px;
     border-radius: 8px;
+}
+
+/* 刷新态（已有数据时过滤/切换）：半透明全屏遮罩，保留旧气泡图可见，但明确提示加载中 */
+.loading-overlay.is-refresh {
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 12px;
+    background: rgba(15, 25, 35, 0.55);
+}
+
+.loading-overlay.is-refresh .loading-spinner {
+    width: 36px;
+    height: 36px;
+    border-width: 3px;
+}
+
+.loading-overlay.is-refresh span {
+    font-size: 14px;
+    color: #c8d8e8;
 }
 
 .loading-spinner {
