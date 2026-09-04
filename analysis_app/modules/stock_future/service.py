@@ -17,7 +17,7 @@ class FutureService:
             query = FutureProject.objects.all()
         # 数据过滤  防止出现异常数据
         # 至少大于0
-        query = query.exclude(price_dict__spot__gt=0)
+        query = query.filter(price_dict__spot__gt=0)
         filters = kwargs.get("filters", [])
         order_by = kwargs.get("order_by", [])
         query = QueryBuild(query, filters, order_by).exec()
