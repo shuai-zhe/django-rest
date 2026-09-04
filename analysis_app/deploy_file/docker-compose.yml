@@ -34,6 +34,8 @@ services:
     restart: always
 
   django:
+    volumes:
+      - /home/daima/logs:/logs
     build:
       dockerfile: deploy_file/Dockerfile
       context: ..
