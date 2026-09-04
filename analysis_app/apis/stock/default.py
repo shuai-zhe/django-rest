@@ -1,5 +1,6 @@
 import abc
 import datetime
+import logging
 import re
 import time
 from typing import Any
@@ -11,6 +12,8 @@ from pandas import DataFrame
 
 from core.constants import StockProjectStatus, StockType
 from core.utils import to_datetime
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_DIFF_INTERVAL = {
     "d": 100,
@@ -184,20 +187,50 @@ class AkShareStockResource(StockResource):
         ).to_dict(orient="records")
 
     def future_list(self, *args, **kwargs):
-        # 根据涨跌幅排序
-        df = ak.futures_fees_info()
-        # 前天无数据的新项目暂时不进行采集展示
+        df_rename_columns = {
+            "symbol": "合约代码",
+            "name": "品种名称",
+            "exchange": "交易所",
+            "trade": "最新价",
+            "volume": "成交量",
+            "position": "持仓量",
+            "preclose": "上日结算价",
+            "changepercent": "涨跌幅",
+        }
+        df_total = ak.futures_fees_info()
+        df_total["涨跌幅"] = 0
+        null_price = df_total[df_total["最新价"] == 0]
+        null_price_list = set(null_price["品种名称"].tolist())
+        df = pd.DataFrame()
+        for item in null_price_list:
+            try:
+                futures_zh_realtime_df = ak.futures_zh_realtime(symbol=item)
+                df = pd.concat([df, futures_zh_realtime_df], ignore_index=True)
+            except Exception as e:
+                logger.error(e)
+        df.rename(columns=df_rename_columns, inplace=True)
+        df = df[df_rename_columns.values()]
+        df_total = df_total[~df_total["品种名称"].isin(df["品种名称"])][
+            df_rename_columns.values()
+        ]
+        df = pd.concat((df_total, df), ignore_index=True)
+
+        # # 前天无数据的新项目暂时不进行采集展示
         df_active = df.groupby("品种名称").apply(
             lambda x: x.sort_values(by=["成交量", "持仓量"], ascending=False).head(1)
-        )[["合约代码", "合约名称"]]
+        )[["合约代码"]]
         df_active["active"] = 1
-        df = df.merge(df_active, on=["合约代码", "合约名称"], how="left")
+        df = df.merge(df_active, on=["合约代码"], how="left")
         df["active"] = df["active"].fillna(0)
+        # 再次判断 如果最新价格为0 active改为0
+        df["active"] = df["active"].where(df["最新价"] != 0, 0)
         df = df[df["上日结算价"].notna()]
         df["涨跌幅"] = (df["最新价"] - df["上日结算价"]) / df["上日结算价"] * 100
         df["rank"] = df["涨跌幅"].rank(ascending=False, method="first").astype("int")
+        # 数据过滤
+        df[["合约代码", "交易所"]] = df[["合约代码", "交易所"]].apply(lambda x: x.str.upper())
+        df.drop_duplicates(subset=["合约代码", "交易所"], inplace=True, keep="last")
         df = df.to_dict(orient="records")
-
         return [self.future_format(row) for row in df]
 
     def future_kline(self, code_id, interval, *args, **kwargs):
