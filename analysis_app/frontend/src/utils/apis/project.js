@@ -1,7 +1,7 @@
 import request from "../request"
 
 // 合法数据源白名单（与后端模块前缀对齐），用于校验，避免脏值打到不存在的路由
-const VALID_DATA_TYPES = ['gate', 'stock']
+const VALID_DATA_TYPES = ['gate', 'stock', 'future']
 // 默认前缀：未存储 / 非法时回退到 gate（货币）
 const DEFAULT_DATA_TYPE = 'gate'
 

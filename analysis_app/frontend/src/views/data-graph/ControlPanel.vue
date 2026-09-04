@@ -82,6 +82,11 @@ const emit = defineEmits([
                             :class="{ active: props.dataType === 'stock' }"
                             @click="emit('update:dataType', 'stock')"
                         >股票</button>
+                       <button
+                            type="button"
+                            :class="{ active: props.dataType === 'future' }"
+                            @click="emit('update:dataType', 'future')"
+                        >期货</button>
                         <button
                             type="button"
                             :class="{ active: props.dataType === 'gate' }"

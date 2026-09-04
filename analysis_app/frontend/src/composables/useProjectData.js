@@ -15,13 +15,12 @@ const STORAGE_KEY = 'global_data_type'
 const _savedType = (() => {
     try {
         const v = localStorage.getItem(STORAGE_KEY)
-        return v === 'gate' || v === 'stock' ? v : 'gate'
+        return v === 'gate' || v === 'stock' || v ==="future" ? v : 'gate'
     } catch {
         return 'gate'
     }
 })()
-const globalDataType = ref(_savedType)   // 'gate'=货币, 'stock'=股票
-
+const globalDataType = ref(_savedType)   // 'gate'=货币, 'stock'=股票 , 'future'=期货
 function createStore() {
     const projectListData = ref([])
     const loading = ref(false)
