@@ -24,4 +24,10 @@ app.conf.beat_schedule = {
         "schedule": crontab(minute="*/30"),
         "args": (),
     },
+    "get-stock-future-data": {
+        "task": "get_stock_future_data_sync",
+        # 每 10 分钟检查一次；任务内部仅在「周一至周五 且 15:00 收盘之后」才真正同步
+        "schedule": crontab(minute="*/30"),
+        "args": (),
+    },
 }

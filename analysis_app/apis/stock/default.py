@@ -10,6 +10,7 @@ import pandas as pd
 from pandas import DataFrame
 
 from core.constants import StockProjectStatus, StockType
+from core.utils import to_datetime
 
 DEFAULT_DIFF_INTERVAL = {
     "d": 100,
@@ -35,11 +36,40 @@ class StockResource(abc.ABC):
         return {
             "rank": origin_data.get("rank", 0),
             "symbols": symbols,
+            "position": origin_data.get("持仓量"),
             "performance": {
                 "day": origin_data.get("涨跌幅", 0),
                 "abs_day": origin_data.get("振幅", 0),
             },
         }
+
+    def future_format(self, data: dict, *args, **kwargs):
+        """
+        单条格式化数据
+        :param data:原始数据
+        :return:
+        """
+        code_type = data.get("交易所", "")
+        code_value = data.get("合约代码", "")
+        format_data = {
+            "name": code_value,
+            "display_name": data.get("品种名称"),
+            "code_id": code_value,
+            "code_type": code_type,
+            "price_dict": {
+                StockProjectStatus.SPOT.value: data.get("最新价"),
+            },
+            "volume_dict": {
+                StockProjectStatus.SPOT.value: data.get("成交量"),
+            },
+            "market_cap_dict": {
+                StockProjectStatus.SPOT.value: data.get("持仓量", 0) * data.get("最新价", 0),
+                "market": data.get("持仓量", 0),
+            },
+            "active": data.get("active", 1),
+        }
+        format_data["extra_info"] = self.extra_info(format_data, origin_data=data)
+        return format_data
 
     def stock_format(self, data: dict, *args, **kwargs):
         """
@@ -83,12 +113,21 @@ class StockResource(abc.ABC):
             "low": "l",
             "close": "c",
             "volume": "v",
+            "datetime": "t",
+            "时间": "t",
+            "最高": "h",
+            "最低": "l",
+            "收盘": "c",
+            "开盘": "o",
         }
         extra_columns = {
             "amount": "amount",
             "pctChg": "pctChg",
+            "成交量": "amount",
+            "涨跌幅": "pctChg",
         }
         if kwargs.get("applay_extra_columns"):
+            # 暂时不展示即可
             have_columns.update(extra_columns)
 
         if isinstance(data, list) or isinstance(data, dict):
@@ -96,9 +135,9 @@ class StockResource(abc.ABC):
                 return []
 
         if isinstance(data, DataFrame):
-            return data.rename(columns=have_columns)[
-                list(have_columns.values())
-            ].to_dict(orient="records")
+            df = data.rename(columns=have_columns)[list(set(have_columns.values()))]
+            df["t"] = df["t"].map(lambda x: to_datetime(x).timestamp())
+            return df.sort_values("t", ascending=True).to_dict(orient="records")
 
     @abc.abstractmethod
     def stock_list(self) -> list:
@@ -106,6 +145,14 @@ class StockResource(abc.ABC):
 
     @abc.abstractmethod
     def stock_kline(self, *args, **kwargs) -> list:
+        return []
+
+    @abc.abstractmethod
+    def future_list(self, *args, **kwargs) -> list:
+        return []
+
+    @abc.abstractmethod
+    def future_kline(self, *args, **kwargs) -> list:
         return []
 
 
@@ -135,6 +182,53 @@ class AkShareStockResource(StockResource):
             end_date=end_date,
             adjust=adjust,
         ).to_dict(orient="records")
+
+    def future_list(self, *args, **kwargs):
+        # 根据涨跌幅排序
+        df = ak.futures_fees_info()
+        # 前天无数据的新项目暂时不进行采集展示
+        df_active = df.groupby("品种名称").apply(
+            lambda x: x.sort_values(by=["成交量", "持仓量"], ascending=False).head(1)
+        )[["合约代码", "合约名称"]]
+        df_active["active"] = 1
+        df = df.merge(df_active, on=["合约代码", "合约名称"], how="left")
+        df["active"] = df["active"].fillna(0)
+        df = df[df["上日结算价"].notna()]
+        df["涨跌幅"] = (df["最新价"] - df["上日结算价"]) / df["上日结算价"] * 100
+        df["rank"] = df["涨跌幅"].rank(ascending=False, method="first").astype("int")
+        df = df.to_dict(orient="records")
+
+        return [self.future_format(row) for row in df]
+
+    def future_kline(self, code_id, interval, *args, **kwargs):
+        if kwargs.get("error_ct", 0) == 2:
+            return []
+        code_id = code_id.upper().strip()
+        try:
+            if interval in ["daily"]:
+                # try:
+                df = ak.futures_zh_daily_sina(symbol=code_id)
+                # except:
+            elif interval in ["weekly", "monthly"]:
+                df = ak.futures_hist_em(symbol=code_id, period=interval, **kwargs)
+            else:
+                df = ak.futures_zh_minute_sina(symbol=code_id, period=interval)
+        except ValueError as e:
+            if "Length mismatch: Expected axis has 0 elements, new values have" in str(
+                e
+            ):
+                code_id = "".join(re.findall(r"(\D+)", code_id))
+                if not code_id:
+                    return []
+                code_id += "0"
+                kwargs["error_ct"] = kwargs.get("error_ct", 0) + 1
+                return self.future_kline(
+                    code_id=code_id, interval=interval, *args, **kwargs
+                )
+            return []
+        if df.empty:
+            return []
+        return self.stock_kline_format(df)
 
 
 class BaoStockResource(StockResource):
@@ -227,14 +321,22 @@ class BaoStockResource(StockResource):
             result["date"] = result["_day_ts"]
 
         result = result.drop(columns=["_day_ts", "_seq"], errors="ignore")
-        result.sort_values("date", inplace=True, ascending=True)
-
         if result.empty:
             return []
         return self.stock_kline_format(result)
 
+    def future_list(self, *args, **kwargs):
+        return []
+
+    def future_kline(self, *args, **kwargs):
+        return []
+
 
 if __name__ == "__main__":
-    data = BaoStockResource().stock_kline(
-        "sh.600000", "15", start_date="2024-07-01", end_date="2024-12-31"
+    # data = BaoStockResource().stock_kline(
+    #     "sh.600000", "15", start_date="2024-07-01", end_date="2024-12-31"
+    # )
+    get_futures_daily_df = ak.get_futures_daily(
+        start_date="20260904", end_date="20260904", market="DCE"
     )
+    print(get_futures_daily_df)

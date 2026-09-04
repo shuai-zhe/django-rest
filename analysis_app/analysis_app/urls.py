@@ -27,4 +27,5 @@ urlpatterns = [
     path("gate/", include("modules.gate.urls", namespace="gate")),
     path("new/", include("modules.new.urls", namespace="new")),
     path("stock/", include("modules.stock.urls", namespace="stock")),
+    path("future/", include("modules.stock_future.urls", namespace="stock_future")),
 ]

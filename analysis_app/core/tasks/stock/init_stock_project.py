@@ -8,8 +8,8 @@ logger = logging.getLogger("init_update_project")
 
 
 class StockMerge(ProjectMerge):
-    def __init__(self, status, *args, **kwargs):
-        super().__init__(status, *args, **kwargs, model=StockProject)
+    def __init__(self, status, model=None, *args, **kwargs):
+        super().__init__(status=status, *args, **kwargs, model=model or StockProject)
         self.fields = ["display_name"]
 
     def get_origin_data(self):
@@ -22,7 +22,13 @@ class StockMerge(ProjectMerge):
         )
 
     def init_builder(self, resource):
-        fields = ["extra_info", "price_dict", "volume_dict", "market_cap_dict"]
+        fields = [
+            "extra_info",
+            "price_dict",
+            "volume_dict",
+            "market_cap_dict",
+            "active",
+        ]
         data = {filed: resource[filed] for filed in fields}
         return data
 

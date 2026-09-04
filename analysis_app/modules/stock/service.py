@@ -8,10 +8,7 @@ from .data_build.kline_build import _StockKline
 class StockService:
     def formatter(self, obj):
         # 数据暂无排名
-
         data = obj.values()
-        for index, value in enumerate(data):
-            value["extra_info"]["rank"] = index + 1
         return data
 
     def get_project_all(self, **kwargs):

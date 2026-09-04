@@ -83,7 +83,7 @@ class ProjectMerge:
             return
         setattr(queryset, filed, update_data)
 
-    def init_builder(self, resource):
+    def init_builder(self, resource: dict):
         return {
             "extra_info": {
                 "performance": resource["performance"],
@@ -94,6 +94,7 @@ class ProjectMerge:
             "price_dict": {self.status: resource["price"]},
             "volume_dict": {self.status: resource["volume"]},
             "market_cap_dict": {self.status: resource["marketcap"]},
+            "active": resource.get("active", 1),
         }
 
     def init_update_build(
@@ -150,7 +151,11 @@ class ProjectMerge:
                     self.init_update_build(pm, project)
                     count_dict["update"] += 1
                 else:
-                    _ = {**model_data, **self.init_builder(project)}
+                    _ = {
+                        **model_data,
+                        **self.init_builder(project),
+                        "display_name": project.get("display_name", ""),
+                    }
                     pm = self.model(**_)
                     create_project_list.append(pm)
                     count_dict["create"] += 1

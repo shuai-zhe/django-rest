@@ -1,19 +1,19 @@
 default_stages: [pre-commit]
 repos:
-  - repo: https://github.com/pre-commit/pre-commit-hooks
+  - repo: git@github.com:pre-commit/pre-commit-hooks.git
     rev: v5.0.0
     hooks:
     - id: check-merge-conflict
-  - repo: https://github.com/pycqa/isort
+  - repo: git@github.com:PyCQA/isort.git
     rev: 5.13.2
     hooks:
       - id: isort
         args: ["--profile", "black"]
-  - repo: https://github.com/psf/black
+  - repo: git@github.com:psf/black.git
     rev: 23.3.0
     hooks:
     - id: black
-  - repo: https://github.com/pre-commit/pre-commit-hooks
+  - repo: git@github.com:pre-commit/pre-commit-hooks.git
     rev: v2.1.0
     hooks:
     - id: flake8

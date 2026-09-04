@@ -5,6 +5,37 @@ from celery import shared_task
 from core.constants import ProjectStatus
 
 
+def is_future_trading_open() -> bool:
+    from datetime import datetime, time
+
+    """
+    # 所有数据结束书简延迟30分钟闭盘数据卡点未采集
+    笼统判断：当前时间是否期货闭盘(休市，没有行情)
+    返回True=闭盘；返回False=开盘有行情
+    只看时钟，不处理周末节假日、集合竞价、节假日前无夜盘特殊逻辑
+    """
+    t = datetime.now().time()
+
+    # 日盘交易 09:00‑10:15，10:30‑11:30，13:30‑15:00
+    day_trade = (
+        (time(9, 0) <= t < time(10, 45))
+        or (time(11, 00) <= t < time(12, 00))
+        or (time(14, 00) <= t < time(15, 30))
+    )
+
+    # 夜盘 21:00 ~ 02:30 (最长夜盘到2:30，直接按最大范围粗判)
+    night_trade = (time(21, 30) <= t) or (t < time(3, 00))
+
+    # 小节休10:15‑10:30 直接算闭盘
+    if time(10, 45) <= t < time(11, 00):
+        return True
+
+    # 只要在交易时段就是不闭盘，否则闭盘
+    if day_trade or night_trade:
+        return False
+    return True
+
+
 def is_a_share_trading_open() -> bool:
     """判断当前是否处于 A 股（中国内地）的交易时段，允许同步。
 
@@ -73,3 +104,14 @@ def get_stock_data_sync():
     stock_merge = StockMerge(status=ProjectStatus.SPOT.value)
     stock_merge.save()
     return "股票数据更新完成"
+
+
+@shared_task(name="get_stock_future_data_sync")
+def get_stock_future_data_sync():
+    from core.tasks.stock.init_future_project import FutureMerge
+
+    if not is_future_trading_open():
+        return "非 期货 股交易时段，跳过期货数据更新"
+
+    stock_merge = FutureMerge(status=ProjectStatus.SPOT.value)
+    stock_merge.save()
