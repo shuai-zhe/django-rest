@@ -21,7 +21,11 @@ class BaseKlineBuild(metaclass=abc.ABCMeta):
 
     def extra_format(self, data, **kwargs) -> dict:
         """额外的字段添加共同体中"""
-        data["interval"] = KlineInterval.values()
+        data["interval"] = list(KlineInterval.values())
+        stop_interval = ["1s","10s"]
+        for interval in stop_interval:
+            if interval in data["interval"]:
+                data["interval"].pop(data["interval"].index(interval))
         return data
 
     def build_kline(self, validated_data, **kwargs):

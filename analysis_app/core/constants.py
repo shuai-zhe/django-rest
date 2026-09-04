@@ -26,6 +26,13 @@ class ChoiceMixin(Enum):
         excludes = excludes or []
         return tuple(item.value for item in cls if item not in excludes)
 
+    @classmethod
+    def value_to_self(cls,key):
+        self = dict(zip(cls.values(),cls.names())).get(key)
+        if not self:
+            raise ValueError(f"未找到枚举值：{key}")
+        return getattr(cls,self)
+
 
 class ProjectStatus(ChoiceMixin):
     SPOT = "spot"
@@ -94,6 +101,20 @@ class KlineInterval(ChoiceMixin):
             KlineInterval.D1: 60 * 60 * 24,
             KlineInterval.D7: 60 * 60 * 24 * 7,
             KlineInterval.D30: 60 * 60 * 24 * 30,
+        }
+
+        return map_[self]
+
+    def translate_to_future(self):
+        map_ = {
+            KlineInterval.M1: 1,
+            KlineInterval.M5: 5,
+            KlineInterval.M15: 15,
+            KlineInterval.M30: 30,
+            KlineInterval.H1: 60,
+            KlineInterval.D1: "daily",
+            KlineInterval.D7: "weekly",
+            KlineInterval.D30: "monthly",
         }
 
         return map_[self]
