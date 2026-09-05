@@ -210,11 +210,14 @@ class AkShareStockResource(StockResource):
                 logger.error(e)
         df.rename(columns=df_rename_columns, inplace=True)
         df = df[df_rename_columns.values()]
+        df["品种名称"] = df["品种名称"].map(
+            lambda x: re.search(r"^(.*?[^0-9])(?=\d*$)", x).group(1)
+        )
+        df = df[~df["品种名称"].str.contains("连续")]
         df_total = df_total[~df_total["品种名称"].isin(df["品种名称"])][
             df_rename_columns.values()
         ]
         df = pd.concat((df_total, df), ignore_index=True)
-
         # # 前天无数据的新项目暂时不进行采集展示
         df_active = df.groupby("品种名称").apply(
             lambda x: x.sort_values(by=["成交量", "持仓量"], ascending=False).head(1)
