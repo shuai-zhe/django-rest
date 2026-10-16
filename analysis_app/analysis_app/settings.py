@@ -44,8 +44,11 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "rest_framework",
+    "core.models",
     "modules.gate",
     "modules.new",
+    "modules.stock",
+    "modules.stock_future",
     "core.tasks",
 ]
 
@@ -145,3 +148,62 @@ try:
 except Exception as e:
     print(f"Failed to import environment configuration: {e}")
     raise e
+
+# ---------------------------------------------------------------------------
+# 日志配置：统一持久化到本地滚动文件，方便后续定期检查程序报错情况。
+# - app.log         : 全部级别（INFO 及以上）
+# - app.error.log   : 仅 ERROR 及以上，用于快速排查报错
+# 按天滚动、保留 30 天；Django 启动时会自动加载本配置并接管 logging。
+# ---------------------------------------------------------------------------
+if bool(os.environ.get("LOG_USE", False)):
+    _LOG_DIR = BASE_DIR / "logs"
+    _LOG_DIR.mkdir(exist_ok=True)
+
+    _LOG_FORMAT = "[%(asctime)s] %(levelname)s [%(name)s] %(message)s"
+
+    LOGGING = {
+        "version": 1,
+        "disable_existing_loggers": False,
+        "formatters": {
+            "verbose": {"format": _LOG_FORMAT},
+        },
+        "handlers": {
+            "console": {
+                "level": "INFO",
+                "class": "logging.StreamHandler",
+                "formatter": "verbose",
+            },
+            "file": {
+                "level": "INFO",
+                "class": "logging.handlers.TimedRotatingFileHandler",
+                "filename": str(_LOG_DIR / "app.log"),
+                "when": "midnight",
+                "interval": 1,
+                "backupCount": 30,
+                "encoding": "utf-8",
+                "formatter": "verbose",
+            },
+            "error_file": {
+                "level": "ERROR",
+                "class": "logging.handlers.TimedRotatingFileHandler",
+                "filename": str(_LOG_DIR / "app.error.log"),
+                "when": "midnight",
+                "interval": 1,
+                "backupCount": 30,
+                "encoding": "utf-8",
+                "formatter": "verbose",
+            },
+        },
+        "root": {
+            "handlers": ["console", "file", "error_file"],
+            "level": "INFO",
+        },
+        "loggers": {
+            # 第三方库（ES / Django / celery 等）默认只输出 WARNING，避免噪音刷屏
+            "": {
+                "handlers": ["console", "file", "error_file"],
+                "level": "INFO",
+                "propagate": False,
+            },
+        },
+    }

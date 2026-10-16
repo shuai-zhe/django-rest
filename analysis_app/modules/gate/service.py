@@ -1,3 +1,4 @@
+from core.query_utils import QueryBuild
 from modules.gate.models import Project
 
 from .data_build.kline_build import _Kline
@@ -8,7 +9,11 @@ class GateService:
         return obj.values()
 
     def get_project_all(self, **kwargs):
-        return self.formatter(Project.objects.all())
+        query = Project.active_obj.all()
+        filters = kwargs.get("filters", [])
+        order_by = kwargs.get("order_by", [])
+        query = QueryBuild(query, filters, order_by).exec()
+        return self.formatter(query)[:100]
 
     def get_kline_all(self, validated_data, **kwargs):
         # 后续封装自动查找和错误切换

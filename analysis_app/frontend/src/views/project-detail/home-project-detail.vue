@@ -13,7 +13,7 @@ const router = useRouter()
 const codeId = computed(() => (route.params.codeId || '').toString())
 
 // 项目名称/显示名（容器页用于顶部导航，取自 Project 表共享数据）
-const { projectListData, fetchData } = useProjectData()
+const { projectListData, fetchData } = useProjectData('detail')
 const project = computed(() =>
     projectListData.value.find(d => d.code_id === codeId.value) || null
 )
@@ -23,7 +23,8 @@ function goBack() {
 }
 
 onMounted(() => {
-    fetchData()   // 预加载 Project 表，供头部展示名称
+    // 带 code_id 预加载当前项目，供头部展示名称（与子组件共享单例，避免无参全量请求）
+    fetchData(false, { code_id: codeId.value })
 })
 </script>
 
@@ -45,7 +46,7 @@ onMounted(() => {
                 <ProjectOverview :code-id="codeId" />
 
                 <!-- K 线图子组件：自身请求 K 线数据并绘制蜡烛图 -->
-<KlineChart :code-id="codeId" interval="15m" />
+                <KlineChart :code-id="codeId" interval="15m" />
             </div>
 
             <!-- 右列（40%）：新闻资讯（嵌入紧凑模式） -->

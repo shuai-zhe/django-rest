@@ -23,6 +23,7 @@ const emit = defineEmits(['update:modelValue', 'close'])
 // ==================== 预设数据 ====================
 const rankPresets = [
     { label: '1-100',       min: 1,   max: 100 },
+    { label: '前150',       min: 1,   max: 150 },
     { label: '101-200',     min: 101, max: 200 },
     { label: '201-300',     min: 201, max: 300 },
     { label: '301-500',     min: 301, max: 500 },
@@ -43,7 +44,7 @@ const mcVolPresets = [
 
 // ==================== 本地状态 ====================
 const local = reactive({
-    rank:    { presetIdx: -1, customMin: 0, customMax: 250 },    // 默认自定义 0-250
+    rank:    { presetIdx: 0, customMin: null, customMax: null },     // 默认 1-100
     vol:     { presetIdx: -2, customMin: null, customMax: null },
     mc:      { presetIdx: -2, customMin: null, customMax: null },
     symbols: '',
@@ -126,7 +127,7 @@ function updateInput(section, field, val) {
 }
 
 function handleReset() {
-    local.rank    = { presetIdx: -1, customMin: 0, customMax: 250 }    // 恢复自定义 0-250
+    local.rank    = { presetIdx: 0, customMin: null, customMax: null }     // 恢复默认 1-100
     local.vol     = { presetIdx: -2, customMin: null, customMax: null }
     local.mc      = { presetIdx: -2, customMin: null, customMax: null }
     local.symbols = ''
@@ -189,7 +190,7 @@ defineExpose({ activeTags, handleReset })
         <!-- 顶部标题栏 + 关闭 -->
         <div class="panel-header">
             <span class="panel-title">筛选条件</span>
-            <button class="panel-close" @click="$emit('close')">✕</button>
+<!--            <button class="panel-close" @click="$emit('close')">✕</button>-->
         </div>
 
         <!-- 三列 -->
@@ -335,7 +336,7 @@ defineExpose({ activeTags, handleReset })
                     @change="local.riseMin = $event.target.value === '' ? null : Number($event.target.value); emitChange()"
                     min="0" />
             </div>
-            <button class="confirm-btn" @click="$emit('close')">确定</button>
+<!--            <button class="confirm-btn" @click="$emit('close')">确定</button>-->
             <button class="reset-btn" @click="handleReset">重置</button>
         </div>
     </div>

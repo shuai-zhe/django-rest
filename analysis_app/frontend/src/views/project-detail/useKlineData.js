@@ -1,5 +1,6 @@
 import { ref, computed, watch } from 'vue'
 import { ProjectKline } from "@/utils/apis/project"
+import { useGlobalDataType } from "@/composables/useProjectData"
 
 // ==================== 时间窗口校验（柱子数上限） ====================
 // 与后端 KlineInterval 对齐：interval 字符串 -> 秒
@@ -60,6 +61,9 @@ export function useKlineData(codeIdRef, intervalRef) {
         return intervalRef || '1m'
     })
 
+    // 全局数据源类型（gate=货币 / stock=股票），跟随工具栏切换
+    const dataType = useGlobalDataType()
+
     // store key = codeId + interval，切换级别时各用各的数据
     const storeKey = computed(() => `${codeId.value}:${interval.value}`)
 
@@ -97,7 +101,7 @@ export function useKlineData(codeIdRef, intervalRef) {
         s.error.value = ''
         const params = buildKlineParams({ code_id: codeId.value, interval: interval.value })
         try {
-            const res = await ProjectKline(params)
+            const res = await ProjectKline(params, dataType.value)
             const raw = res?.data?.kline || res?.kline || []
             const ivs = res?.data?.interval || res?.interval || []
             s.kline.value = raw
@@ -129,7 +133,7 @@ export function useKlineData(codeIdRef, intervalRef) {
         const oldLen = ks.length
         try {
             const params = buildKlineParams({ code_id: codeId.value, interval: interval.value, to_date: toDate })
-            const res = await ProjectKline(params)
+            const res = await ProjectKline(params, dataType.value)
             const raw = res?.data?.kline || res?.kline || []
             if (Array.isArray(raw) && raw.length) {
                 // 按时间戳去重合并（新数据在前），并升序排序
@@ -190,11 +194,11 @@ export function useKlineData(codeIdRef, intervalRef) {
         }
     }
 
-    // codeId / interval 任一变化时重载
+    // codeId / interval / dataType 任一变化时重载
     let stopWatch = null
     function bind() {
-        stopWatch = watch([codeId, interval], ([newId, newIv], [oldId, oldIv]) => {
-            if (newId === oldId && newIv === oldIv) return
+        stopWatch = watch([codeId, interval, dataType], ([newId, newIv, newDt], [oldId, oldIv, oldDt]) => {
+            if (newId === oldId && newIv === oldIv && newDt === oldDt) return
             loadKline()
         })
     }

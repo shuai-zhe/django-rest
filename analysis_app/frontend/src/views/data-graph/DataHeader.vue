@@ -1,11 +1,15 @@
 <script setup>
 import { ref, reactive, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { useProjectData } from "@/composables/useProjectData"
+import { useProjectData, useGlobalDataType, setDataType } from "@/composables/useProjectData"
 import FilterPanel from "./FilterPanel.vue"
+import ControlPanel from "./ControlPanel.vue"
+import FunctionPanel from "./FunctionPanel.vue"
 
 const props = defineProps({
     activeTimeFrame: { type: String, default: 'day' },
+    dataType:        { type: String, default: 'gate' },
+    metric:          { type: Array, default: () => [] },
 })
 
 const emit = defineEmits([
@@ -14,12 +18,34 @@ const emit = defineEmits([
     'update:volMin', 'update:volMax',
     'update:symbols', 'update:riseMin',
     'update:activeTimeFrame',
+    'update:dataType',
     'update:searchName',
+    'update:metric',
     'viewDetail',
 ])
 
 const { projectListData, progress } = useProjectData()
+const dataType = useGlobalDataType()
+// 股票模式下仅允许「日」级别：其它时间维度静止（不可点击）
+const timeFrameLocked = computed(() => dataType.value === 'stock')
 const router = useRouter()
+
+// 锁定提示：股票模式下点击/悬浮被禁用的时间维度时给出说明
+const lockHint = ref(false)
+let lockHintTimer = null
+function showLockHint() {
+    if (!timeFrameLocked.value) return
+    lockHint.value = true
+    if (lockHintTimer) clearTimeout(lockHintTimer)
+    lockHintTimer = setTimeout(() => { lockHint.value = false }, 1600)
+}
+function onTfClick(opt) {
+    if (timeFrameLocked.value && opt.key !== 'day') {
+        showLockHint()
+        return
+    }
+    emit('update:activeTimeFrame', opt.key)
+}
 const remaining = computed(() => Math.ceil((1 - progress.value) * 60))
 
 // 跳转到新闻独立页面
@@ -41,15 +67,59 @@ const timeFrameOptions = [
     { key: 'year', label: '年' },
 ]
 
-// ==================== 面板开关 ====================
+// ==================== 面板开关（互斥：同时只能展开一个浮层，避免重叠） ====================
 const panelOpen = ref(false)
+const ctrlOpen = ref(false)
+const funcOpen = ref(false)
 
-function togglePanel() { panelOpen.value = !panelOpen.value }
+// 统一互斥切换：仅展开目标浮层，其余全部收起；展开非搜索浮层时也收起搜索下拉
+function soloPanel(which) {
+    panelOpen.value = which === 'panel'
+    ctrlOpen.value = which === 'ctrl'
+    funcOpen.value = which === 'func'
+    if (which !== 'search') closeSearch()
+}
+function togglePanel() { soloPanel(panelOpen.value ? null : 'panel') }
+function toggleCtrl()  { soloPanel(ctrlOpen.value ? null : 'ctrl') }
+function toggleFunc()  { soloPanel(funcOpen.value ? null : 'func') }
 function closePanel()  { panelOpen.value = false }
+function closeCtrl()   { ctrlOpen.value = false }
+function closeFunc()   { funcOpen.value = false }
+
+// 搜索框获得焦点时也收起其余浮层（与按钮浮层互斥，避免重叠）
+function onSearchFocus() {
+    searchOpen.value = true
+    panelOpen.value = false
+    ctrlOpen.value = false
+    funcOpen.value = false
+}
+
+// 主题（示例：可后续扩展为真实换肤）
+const theme = ref('dark')
+function onThemeChange(t) { theme.value = t }
+
+// 数据源切换（股票 / 货币）：更新单例并重新拉取，再向上通知
+function onDataTypeChange(t) {
+    setDataType(t)
+    emit('update:dataType', t)
+    // 股票模式仅支持「日」级别，若当前非日则强制切回日
+    if (t === 'stock' && props.activeTimeFrame !== 'day') {
+        emit('update:activeTimeFrame', 'day')
+    }
+}
+
+// 功能面板内导航
+function onNavigate(name) {
+    closeFunc()
+    if (name === 'news') goNews()
+    else if (name === 'home') router.push('/')
+}
 
 // 点击外部关闭
 function onDocClick(e) {
     if (panelOpen.value) closePanel()
+    if (ctrlOpen.value) closeCtrl()
+    if (funcOpen.value) closeFunc()
 }
 function onResize() {
     if (window.innerWidth > 500) searchExpanded.value = false
@@ -68,7 +138,7 @@ onUnmounted(() => {
 
 // ==================== 筛选状态 ====================
 const filterState = reactive({
-    rank:    { presetIdx: -1, customMin: 0, customMax: 250 },    // 默认自定义 0-250
+    rank:    { presetIdx: -2, customMin: null, customMax: null },    // 默认不限（不过滤）
     vol:     { presetIdx: -2, customMin: null, customMax: null },
     mc:      { presetIdx: -2, customMin: null, customMax: null },
     symbols: '',
@@ -78,6 +148,7 @@ const filterState = reactive({
 // ==================== 预设数据（用于解析） ====================
 const rankPresets = [
     { min: 1,   max: 100 },
+    { min: 1,   max: 150 },
     { min: 101, max: 200 },
     { min: 201, max: 300 },
     { min: 301, max: 500 },
@@ -123,13 +194,28 @@ function isSectionActive(section) {
 }
 
 // ==================== 监听变化 → 发射 resolved 值 ====================
-watch(filterState, () => {
+// 深层合并：原地修改 filterState 各子对象的属性（而非整块替换引用），
+// 确保 reactive 嵌套对象的 deep watch 稳定触发，避免点击排名/过滤不发送请求。
+function emitResolved() {
     const r = resolveRank();  emit('update:rankMin', r.min);   emit('update:rankMax', r.max)
     const v = resolveVol();   emit('update:volMin',  v.min);   emit('update:volMax',  v.max)
     const m = resolveMc();    emit('update:mcMin',   m.min);   emit('update:mcMax',   m.max)
     emit('update:symbols', filterState.symbols)
     emit('update:riseMin', filterState.riseMin)
-}, { deep: true, immediate: true })
+}
+
+function onFilterChange(payload) {
+    if (!payload) return
+    if (payload.rank)    Object.assign(filterState.rank, payload.rank)
+    if (payload.vol)     Object.assign(filterState.vol, payload.vol)
+    if (payload.mc)      Object.assign(filterState.mc, payload.mc)
+    if ('symbols' in payload) filterState.symbols = payload.symbols
+    if ('riseMin' in payload) filterState.riseMin = payload.riseMin
+    
+    emitResolved() // 同步 emit，确保用户交互立即更新并触发请求
+}
+
+watch(filterState, emitResolved, { deep: true, immediate: true })
 
 // ==================== 活跃筛选计数 ====================
 const activeCount = computed(() => {
@@ -190,9 +276,13 @@ function closeSearch() { searchOpen.value = false }
 // 下拉选项格式化
 function formatOptPrice(v) {
     if (v == null) return '-'
+    v = Number(v)
     if (v >= 1e3) return '$' + (v / 1e3).toFixed(2) + 'K'
     if (v >= 1) return '$' + v.toFixed(2)
-    return '$' + v.toFixed(4)
+    if (v === 0) return '$0.00'
+    // 0 < v < 1：按数量级动态展开小数（不使用科学计数法，避免被舍成 0）
+    const decimals = Math.min(20, Math.max(2, Math.ceil(-Math.log10(v)) + 2))
+    return '$' + v.toFixed(decimals)
 }
 function formatOptChange(v) {
     if (v == null) return '-'
@@ -223,7 +313,6 @@ function onDocSearchClick(e) {
     <div class="data-header">
         <div class="header-left">
             <span class="header-title">AI Trade</span>
-            <button class="nav-news-btn" @click="goNews">新闻</button>
         </div>
 
         <div class="header-center">
@@ -232,11 +321,16 @@ function onDocSearchClick(e) {
                 <button
                     v-for="opt in timeFrameOptions"
                     :key="opt.key"
-                    :class="['tf-btn', { active: props.activeTimeFrame === opt.key }]"
-                    @click="emit('update:activeTimeFrame', opt.key)"
+                    :class="['tf-btn', { active: props.activeTimeFrame === opt.key, locked: timeFrameLocked && opt.key !== 'day' }]"
+                    @click="onTfClick(opt)"
+                    @mouseenter="showLockHint"
                 >
                     {{ opt.label }}
                 </button>
+                <!-- 锁定提示：股票模式仅支持「日」级别 -->
+                <transition name="lockhint">
+                    <span v-if="lockHint" class="tf-lockhint">股票模式暂仅支持「日」级别</span>
+                </transition>
             </div>
             <select
                 class="timeframe-select"
@@ -247,6 +341,7 @@ function onDocSearchClick(e) {
                     v-for="opt in timeFrameOptions"
                     :key="opt.key"
                     :value="opt.key"
+                    :disabled="timeFrameLocked && opt.key !== 'day'"
                 >
                     {{ opt.label }}
                 </option>
@@ -270,7 +365,7 @@ function onDocSearchClick(e) {
                 <FilterPanel
                     v-if="panelOpen"
                     :model-value="filterState"
-                    @update:model-value="Object.assign(filterState, $event)"
+                    @update:model-value="onFilterChange($event)"
                     @close="closePanel"
                     class="panel-instance"
                 />
@@ -296,7 +391,7 @@ function onDocSearchClick(e) {
                     class="ns-input"
                     type="text"
                     placeholder="搜索名称…"
-                    @focus="searchOpen = true"
+                    @focus="onSearchFocus"
                 />
                 <button v-if="searchQuery" class="ns-clear" @click="clearSearch">×</button>
                 <!-- 下拉 -->
@@ -322,6 +417,53 @@ function onDocSearchClick(e) {
                 <div v-else-if="searchOpen && searchQuery.trim() && searchResults.length === 0" class="ns-dropdown">
                     <div class="ns-empty">无匹配结果</div>
                 </div>
+            </div>
+
+            <!-- 控制面板（主题 / 数据源 / 导航）+ 功能面板（默认时间维度 / 过滤） -->
+            <div class="ctrl-area">
+                <!-- 功能按钮：点击弹出独立的「功能」面板 -->
+                <button class="ctrl-btn ctrl-func-btn" type="button" @click.stop="toggleFunc" :class="{ active: funcOpen }">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="3" width="7" height="7" rx="1"/>
+                        <rect x="14" y="3" width="7" height="7" rx="1"/>
+                        <rect x="3" y="14" width="7" height="7" rx="1"/>
+                        <rect x="14" y="14" width="7" height="7" rx="1"/>
+                    </svg>
+                    <span class="ctrl-func-text"></span>
+                </button>
+
+                <!-- 总控面板按钮 -->
+                <button class="ctrl-btn" type="button" @click.stop="toggleCtrl" :class="{ active: ctrlOpen }">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="3"/>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0-.33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                    </svg>
+                </button>
+
+                <!-- 总控面板（主题 / 数据源 / 导航） -->
+                <ControlPanel
+                    v-if="ctrlOpen"
+                    :theme="theme"
+                    :data-type="props.dataType"
+                    @update:theme="onThemeChange"
+                    @update:data-type="onDataTypeChange"
+                    @navigate="onNavigate"
+                    @close="closeCtrl"
+                />
+
+                <!-- 功能面板（默认时间维度 / 过滤），复用 control-panel 样式 -->
+                <FunctionPanel
+                    v-if="funcOpen"
+                    :active-time-frame="props.activeTimeFrame"
+                    :metric="props.metric"
+                    :model-value="filterState"
+                    @update:active-time-frame="emit('update:activeTimeFrame', $event)"
+                    @update:metric="emit('update:metric', $event)"
+                    @update:model-value="onFilterChange($event)"
+                    @close="closeFunc"
+                />
             </div>
         </div>
 
@@ -366,27 +508,6 @@ function onDocSearchClick(e) {
     white-space: nowrap;
 }
 
-/* 新闻导航按钮 */
-.nav-news-btn {
-    margin-left: 14px;
-    height: 30px;
-    padding: 0 14px;
-    border: 1px solid #1e3a5f;
-    border-radius: 6px;
-    background: rgba(15, 25, 35, 0.6);
-    color: #8ba4be;
-    font-size: 13px;
-    font-family: inherit;
-    cursor: pointer;
-    transition: all 0.15s;
-    white-space: nowrap;
-}
-.nav-news-btn:hover {
-    border-color: #3b82c4;
-    color: #c8d8e8;
-    background: rgba(30, 58, 95, 0.3);
-}
-
 /* ---- 中：筛选按钮 + 面板锚点 ---- */
 .header-center {
     flex: 1;
@@ -425,9 +546,113 @@ function onDocSearchClick(e) {
     background: rgba(30, 58, 95, 0.5);
     color: #c8d8e8;
 }
+.tf-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+    background: transparent;
+    color: #5a708a;
+}
+.tf-btn:disabled:hover {
+    background: transparent;
+    color: #5a708a;
+}
+.tf-btn.locked {
+    opacity: 0.35;
+    cursor: not-allowed;
+    background: transparent;
+    color: #5a708a;
+}
+.tf-btn.locked:hover {
+    background: transparent;
+    color: #5a708a;
+}
 .tf-btn.active {
     background: #1e3a5f;
     color: #ffffff;
+}
+
+/* 锁定提示浮层（股票模式禁用时间维度时） */
+.timeframe-bar {
+    position: relative;
+}
+.tf-lockhint {
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 8px);
+    transform: translateX(-50%);
+    white-space: nowrap;
+    padding: 6px 12px;
+    border-radius: 6px;
+    background: rgba(20, 32, 44, 0.96);
+    border: 1px solid #2b5278;
+    color: #e0edf5;
+    font-size: 12px;
+    line-height: 1;
+    pointer-events: none;
+    z-index: 30;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+.tf-lockhint::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-top-color: #2b5278;
+}
+.lockhint-enter-active,
+.lockhint-leave-active {
+    transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.lockhint-enter-from,
+.lockhint-leave-to {
+    opacity: 0;
+    transform: translateX(-50%) translateY(4px);
+}
+
+/* 控制面板入口（功能按钮 + 齿轮 icon 平行排列） */
+.ctrl-area {
+    position: relative;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.ctrl-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: 1px solid #1e3a5f;
+    border-radius: 6px;
+    background: rgba(15, 25, 35, 0.6);
+    color: #8ba4be;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.ctrl-btn:hover {
+    border-color: #3b82c4;
+    color: #c8d8e8;
+    background: rgba(30, 58, 95, 0.3);
+}
+.ctrl-btn.active {
+    border-color: #3b82c4;
+    color: #ffffff;
+    background: rgba(30, 58, 95, 0.5);
+}
+
+/* [功能] 按钮：带文字，宽度自适应 */
+.ctrl-func-btn {
+    width: auto;
+    padding: 0 10px;
+    gap: 5px;
+}
+.ctrl-func-text {
+    font-size: 13px;
+    font-family: inherit;
+    letter-spacing: 1px;
 }
 
 /* 窄屏下拉框 — 默认隐藏 */
@@ -670,10 +895,10 @@ function onDocSearchClick(e) {
     font-size: 12px;
 }
 
-/* ========== 响应式：窄屏隐藏按钮组，显示下拉框 ========== */
+/* ========== 响应式：窄屏隐藏按钮组与下拉框（时间维度入口移至功能面板） ========== */
 @media (max-width: 900px) {
     .timeframe-bar { display: none; }
-    .timeframe-select { display: inline-block; }
+    .timeframe-select { display: none; }
 }
 
 /* ========== 超窄屏：搜索按钮 / 展开覆盖 ========== */
@@ -681,6 +906,10 @@ function onDocSearchClick(e) {
     /* 未展开：所有元素正常显示，搜索只是一个图标按钮 */
     .name-search-wrapper {
         flex: initial;
+    }
+    /* 小屏下取消独立的筛选 按钮（相关功能已在控制面板内） */
+    .filter-area {
+        display: none;
     }
     .ns-mobile-btn {
         display: inline-flex;
@@ -710,7 +939,8 @@ function onDocSearchClick(e) {
     /* ===== 展开后：覆盖整个 header-center ===== */
     .header-center:has(.name-search-wrapper.ns-expanded) .timeframe-bar,
     .header-center:has(.name-search-wrapper.ns-expanded) .timeframe-select,
-    .header-center:has(.name-search-wrapper.ns-expanded) .filter-area {
+    .header-center:has(.name-search-wrapper.ns-expanded) .filter-area,
+    .header-center:has(.name-search-wrapper.ns-expanded) .ctrl-area {
         display: none;
     }
     .name-search-wrapper.ns-expanded {
@@ -770,8 +1000,11 @@ function onDocSearchClick(e) {
 .panel-instance {
     position: fixed;  /* 相对于浏览器窗口 */
     top: 50px;
-    left: 20px;
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
     width: 85vw;
+    max-width: 700px;
     height: 500px;
 }
 

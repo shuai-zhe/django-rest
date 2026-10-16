@@ -1,40 +1,50 @@
 <script setup>
 import { computed, onMounted, onUnmounted } from 'vue'
 import { useProjectData } from "@/composables/useProjectData"
-import { useKlineData } from "./useKlineData"
 
 const props = defineProps({
     codeId: { type: String, required: true },
 })
 
 // ==================== 项目信息（来自 Project 表共享数据） ====================
-const { projectListData, fetchData } = useProjectData()
+const { projectListData, fetchData, startAutoRefresh, stopAutoRefresh } = useProjectData('detail')
 const project = computed(() =>
     projectListData.value.find(d => d.code_id === props.codeId) || null
 )
 
-// ==================== K 线数据（自身请求） ====================
-const { stats, latestPrice, loadKline, startAutoRefresh, stop, bind } = useKlineData(() => props.codeId)
-bind()
+// ==================== 24h 统计 ====================
+// 不再自行请求 K 线，直接读取后端随 K 线请求回写的 extra_info.analysis
+const analysis = computed(() => project.value?.extra_info?.analysis || {})
+const stats = computed(() => ({
+    high: analysis.value?.high_24h ?? null,
+    low: analysis.value?.low_24h ?? null,
+    changePct: analysis.value?.change_24h_pct ?? null,
+}))
 
-// 成交量 / 市值（优先 spot，兜底取第一个）
+// 最新价：优先 analysis 中的最新价，其次 Project 表 spot 价
+const latestPriceFinal = computed(
+    () => analysis.value?.price ?? project.value?.price_dict?.spot ?? null
+)
+
+// 成交量 / 市值：优先后端 analysis（与图表口径一致），兜底 Project 表
 function pickFirst(dict) {
     if (!dict) return null
     if (dict.spot != null) return dict.spot
     const keys = Object.keys(dict)
     return keys.length ? dict[keys[0]] : null
 }
-const volume = computed(() => pickFirst(project.value?.volume_dict))
-const marketCap = computed(() => pickFirst(project.value?.market_cap_dict))
-
-// 最新价：优先 K 线，其次 Project 表
-const latestPriceFinal = computed(() => latestPrice.value ?? project.value?.price_dict?.spot ?? null)
+const volume = computed(() => analysis.value?.volume_24h ?? pickFirst(project.value?.volume_dict))
+const marketCap = computed(() => analysis.value?.market_cap ?? pickFirst(project.value?.market_cap_dict))
 
 // ==================== 格式化 ====================
 function formatPrice(v) {
     if (v == null || isNaN(v)) return '-'
-    if (v >= 1) return '$' + Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-    return '$' + Number(v).toFixed(6)
+    v = Number(v)
+    if (v >= 1) return '$' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    if (v === 0) return '$0.00'
+    // 0 < v < 1：按数量级动态展开小数（不使用科学计数法，避免被舍成 0）
+    const decimals = Math.min(20, Math.max(2, Math.ceil(-Math.log10(v)) + 2))
+    return '$' + v.toFixed(decimals)
 }
 function formatMoney(v) {
     if (v == null || isNaN(v)) return '-'
@@ -56,11 +66,11 @@ function pctClass(v) {
 
 // ==================== 生命周期 ====================
 onMounted(async () => {
-    await fetchData()          // 拉取 Project 表（成交量/市值）
-    startAutoRefresh()         // 请求 K 线并开启 60s 刷新
+    await fetchData(true, { code_id: props.codeId })   // 强制按 code_id 过滤请求该项目单条
+    startAutoRefresh(10000, { code_id: props.codeId }) // 开启刷新，每 10s 拉取当前项目单条
 })
 onUnmounted(() => {
-    stop()
+    stopAutoRefresh()
 })
 </script>
 

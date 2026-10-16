@@ -63,12 +63,40 @@ CELERY_CONNECT_URL = (
 )
 CELERY_BROKER_URL = CELERY_CONNECT_URL.format(REDIS_DB="7")
 CELERY_RESULT_BACKEND = CELERY_CONNECT_URL.format(REDIS_DB="8")
-CELERY_WORKER_CONCURRENCY = 20
-CELERY_WORKER_PREFETCH_MULTIPLIER = 20
-CELERY_WORKER_MAX_TASKS_PER_CHILD = 100
+CELERY_WORKER_CONCURRENCY = os.environ.get("CELERY_WORKER_CONCURRENCY", 4)
+CELERY_WORKER_PREFETCH_MULTIPLIER = os.environ.get(
+    "CELERY_WORKER_PREFETCH_MULTIPLIER", 4
+)
+CELERY_WORKER_MAX_TASKS_PER_CHILD = os.environ.get(
+    "CELERY_WORKER_MAX_TASKS_PER_CHILD", 4
+)
 CELERY_TASK_ALWAYS_EAGER = False
 CELERY_WORKER_DISABLE_RATE_LIMITS = True
 CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+
+# ---- Worker 健壮性（防止长时运行后"假活"导致任务停摆）----
+# 任务执行完成后再 ack；worker 崩溃/超时会被 broker 重新投递，避免任务被默默吞掉
+CELERY_TASK_ACKS_LATE = True
+# worker 与 broker 失联时丢弃正在执行的任务，由其他 worker 重做（防任务永远卡在 unacked）
+CELERY_TASK_REJECT_ON_WORKER_LOST = True
+# 开启事件，便于 inspect / 外部 watchdog 通过 events 发现"假活"
+CELERY_WORKER_SEND_TASK_EVENTS = True
+CELERY_TASK_SEND_SENT_EVENT = True
+# 子进程内存上限（KB，约 512MB）。超阈值 worker 自动 fork 新子进程回收旧进程，
+# 防止长时间累积连接池/对象导致假活
+CELERY_WORKER_MAX_MEMORY_PER_CHILD = int(
+    os.environ.get("CELERY_WORKER_MAX_MEMORY_PER_CHILD", 512 * 1024)
+)
+# broker 侧 visibility_timeout（秒）。比单条任务最长执行时间长；
+# worker 假活时，30 分钟未 ack 的任务会被 broker 重新可见并派发到其他 worker
+CELERY_BROKER_TRANSPORT_OPTIONS = {
+    "visibility_timeout": int(os.environ.get("CELERY_VISIBILITY_TIMEOUT", 1800))
+}
+# 全局默认任务超时（具体任务装饰器可覆盖）
+CELERY_TASK_TIME_LIMIT = int(os.environ.get("CELERY_TASK_TIME_LIMIT", 900))  # 硬超时 15 分钟
+CELERY_TASK_SOFT_TIME_LIMIT = int(
+    os.environ.get("CELERY_TASK_SOFT_TIME_LIMIT", 600)
+)  # 软超时 10 分钟
 
 # Timezone configuration
 CELERY_TIMEZONE = "Asia/Shanghai"

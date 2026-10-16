@@ -3,6 +3,30 @@
 # MySQL 首次初始化脚本：在容器启动时自动创建绑定的数据库和账号。
 # 通过 docker-entrypoint-initdb.d 挂载，仅在数据卷为空时执行一次。
 set -e
+python -c '
+#import os
+#
+#akshare_path = "/usr/local/lib/python3.11/site-packages/akshare/stock_feature/stock_hist_em.py"
+#if not os.path.exists(akshare_path):
+#    raise Exception("akshare path not found")
+#
+#OLD = """{"daily": "101", "weekly": "102", "monthly": "103"}"""
+#NEW = """{"daily": "101", "weekly": "102", "monthly": "103","5m":"5","15m":"15","30m":"30","1h":"60"}"""
+#
+#with open(akshare_path, "r", encoding="utf-8") as f:
+#    content = f.read()
+#
+#if OLD not in content:
+#    print("[patch] target string not found or already patched, skip")
+#else:
+#    content = content.replace(OLD, NEW, 1)
+#    with open(akshare_path, "w", encoding="utf-8") as f:
+#        f.write(content)
+#    print("[patch] akshare stock_hist_em.py patched successfully")
+'
+
+
+
 # Django 数据库迁移
 echo "Running Django migrations..."
 python manage.py migrate

@@ -1,12 +1,12 @@
-from core.base_serializers import *
+from rest_framework import serializers
+
+from core.base_serializers import BaseProjectSerializer
 from core.constants import KlineInterval
 from core.excepting import ValidateErrorException
 
 
-class ProjectSerializer(PageSerializer):
-    name = serializers.CharField(max_length=100, required=False, label="项目名称")
-    display_name = serializers.CharField(max_length=100, required=False, label="项目显示名称")
-    code_id = serializers.CharField(max_length=100, required=False, label="项目代码")
+class ProjectSerializer(BaseProjectSerializer):
+    pass
 
 
 class ProjectKlineSerializer(ProjectSerializer):
